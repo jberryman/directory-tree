@@ -1,5 +1,6 @@
 module DirectoryTree (readDirectory, readDirectoryWith,
                       writeDirectory, writeDirectoryWith,
+                      dirTree,
                       openDirectory, 
                       build, zipPaths, writeJustDirs, 
                       DirTree (..), AnchoredDirTree (..), FileName)
@@ -38,14 +39,6 @@ import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 
 
--- {-
-test0 = do (_:/d) <- build "New Folder!"
-           writeJustDirs $ "../" :/ d
-
-test1 = writeDirectory $ 
-        "":/Dir "Working!" 
-        [(Dir "test" []),(File "the_name" "the contents, woot!")]
--- -}
 
 
 -- the String in Dir is always the directory name, never a full path. We
@@ -125,6 +118,8 @@ writeDirectoryWith f t = do writeJustDirs t
 openDirectory :: FilePath -> IOMode -> IO (AnchoredDirTree Handle)
 openDirectory p m = readDirectoryWith (flip openFile m) p
 
+
+dirTree (_:/t) = t
 
 
     -----------------------------

@@ -10,12 +10,12 @@ import Data.Digest.Pure.MD5
 import qualified Data.ByteString.Lazy as B 
 
 
-main = main0
+main = darcsInitialize
 
 -- simple example of creating a directory by hand and writing to disk: here we 
 -- replicate (kind of) running the command "darcs initialize" in the current 
 -- directory:
-main0 = writeDirectory ("source_dir" :/ darcs_d) 
+darcsInitialize = writeDirectory ("source_dir" :/ darcs_d) 
     where darcs_d = Dir "_darcs" [prist_d, prefs_d, patch_d, inven_f, forma_f]
 
           prist_d = Dir "pristine.hashed" [hash_f]
@@ -33,7 +33,8 @@ main0 = writeDirectory ("source_dir" :/ darcs_d)
 -- here we read directories from different locations on the disk and combine 
 -- them into a new directory structure, ignoring the anchored base directory,
 -- then simply 'print' the structure to screen:
-main1 = do (_:/d1) <- readDirectory "../dir1/"
+combineDirectories = 
+        do (_:/d1) <- readDirectory "../dir1/"
            (b:/d2) <- readDirectory "/home/me/dir2"
            let readme = File "README"  "nothing to see here"
             
@@ -45,7 +46,8 @@ main1 = do (_:/d1) <- readDirectory "../dir1/"
 -- up an MD5 hash of all the files in each directory, compare the two hashes 
 -- to see if the directories are identical in their files. (note: doesn't take 
 -- into account directory name mis-matches)
-main2 = do (_:/bsd1) <- readByteStrs "./dir_modified"
+verifyDirectories = 
+        do (_:/bsd1) <- readByteStrs "./dir_modified"
            (_:/bsd2) <- readByteStrs "./dir"
            let hash1 = hashDir bsd1
            let hash2 = hashDir bsd2
@@ -55,4 +57,5 @@ main2 = do (_:/bsd1) <- readByteStrs "./dir_modified"
 
     where readByteStrs = readDirectoryWith B.readFile
           hashDir = md5Finalize. F.foldl' md5Update md5InitialContext
+
 
