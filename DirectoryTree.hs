@@ -1,8 +1,11 @@
 module DirectoryTree (readDirectory, readDirectoryWith,
                       writeDirectory, writeDirectoryWith,
-                      dirTree,
-                      openDirectory, 
-                      build, zipPaths, writeJustDirs, 
+                      build, openDirectory, writeJustDirs, 
+                      zipPaths, free,
+                      -- utilities:
+                      files, filesWithPaths,
+                      anyFailed, failures, failedMap,
+                      -- Types:
                       DirTree (..), AnchoredDirTree (..), FileName)
     where
 
@@ -21,6 +24,15 @@ NOTES:
     "Anchored" at the current directory like so:
          anchorAtCurrent dTree = "." :/: dTree
 
+IDEAS:
+    an informal comonad instance might might make sense: for example, cobind 
+    to convert Failed constructors to Files or Dirs, or cojoin to allow us to 
+    use the traversable/foldable functions over an entire File/Failed 
+    constructor.
+
+TODO:
+    - tree combining functions
+    - ...
 -}
 
 
@@ -33,7 +45,6 @@ import Data.Function (on)
 import Data.List (sort, (\\)) --partition
 import Control.Monad (liftM, filterM, liftM2, ap)
 
---import Data.Monoid
 import Control.Applicative
 import qualified Data.Traversable as T
 import qualified Data.Foldable as F
@@ -119,7 +130,9 @@ openDirectory :: FilePath -> IOMode -> IO (AnchoredDirTree Handle)
 openDirectory p m = readDirectoryWith (flip openFile m) p
 
 
-dirTree (_:/t) = t
+-- strips away base directory wrapper:
+free :: AnchoredDirTree a -> DirTree a
+free (_:/t) = t
 
 
     -----------------------------
@@ -162,8 +175,43 @@ build' p =
 
 
 ---- CHECKING ----
---anyFailed :: DirTree a -> Bool
+
+anyFailed :: DirTree a -> Bool
+anyFailed = not . null . failures
+
+-- ???
 --validate :: DirTree a -> Bool
+
+
+
+---- FLATTENING ----
+
+-- flatten Dir to a list of contents of Files. synonym for Data.Foldable.toList.
+files :: DirTree a -> [a]
+files = F.toList
+
+-- collapses directory structure, returning File contents tupled with its 
+-- associated FilePath 
+filesWithPaths :: AnchoredDirTree a -> [(FilePath,a)]
+filesWithPaths = F.toList . zipPaths
+
+-- returns a list of 'Failed' constructors only:
+failures :: DirTree a -> [DirTree a]
+failures (Dir _ cs) = concatMap failures cs
+failures (File _ _) = []
+failures f          = [f]
+
+
+
+---- HANDLING FAILURES ----
+
+-- maps a function to convert Failed DirTrees to Files or Dirs
+failedMap :: (FileName -> Exception -> DirTree a) -> DirTree a -> DirTree a
+failedMap f (Dir n cs)   = Dir n $map (failedMap f) cs
+failedMap f (Failed n e) = f n e
+failedMap _ fle          = fle
+
+
 
 
     ---------------
@@ -171,9 +219,8 @@ build' p =
     ---------------
 
 
-
-
 ---- PATH CONVERSIONS ----
+
 
 
 -- tuple up the complete filename with the File contents, by building up the 
