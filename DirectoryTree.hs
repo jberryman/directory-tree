@@ -3,7 +3,6 @@ module DirectoryTree (readDirectory, readDirectoryWith,
                       build, openDirectory, writeJustDirs, 
                       zipPaths, free,
                       -- utilities:
-                      files, filesWithPaths,
                       anyFailed, failures, failedMap,
                       -- Types:
                       DirTree (..), AnchoredDirTree (..), FileName)
@@ -29,10 +28,13 @@ IDEAS:
     to convert Failed constructors to Files or Dirs, or cojoin to allow us to 
     use the traversable/foldable functions over an entire File/Failed 
     constructor.
+    define a 'cojoin' function if you want.
 
 TODO:
     - tree combining functions
-    - ...
+    - tree searching based on file names
+    - look into comonad abstraction
+
 -}
 
 
@@ -174,36 +176,19 @@ build' p =
     -----------------
 
 
----- CHECKING ----
+---- HANDLING FAILURES ----
 
 anyFailed :: DirTree a -> Bool
 anyFailed = not . null . failures
 
--- ???
---validate :: DirTree a -> Bool
 
-
-
----- FLATTENING ----
-
--- flatten Dir to a list of contents of Files. synonym for Data.Foldable.toList.
-files :: DirTree a -> [a]
-files = F.toList
-
--- collapses directory structure, returning File contents tupled with its 
--- associated FilePath 
-filesWithPaths :: AnchoredDirTree a -> [(FilePath,a)]
-filesWithPaths = F.toList . zipPaths
-
+-- MAKE THIS COMONADIC???
 -- returns a list of 'Failed' constructors only:
 failures :: DirTree a -> [DirTree a]
 failures (Dir _ cs) = concatMap failures cs
 failures (File _ _) = []
 failures f          = [f]
 
-
-
----- HANDLING FAILURES ----
 
 -- maps a function to convert Failed DirTrees to Files or Dirs
 failedMap :: (FileName -> Exception -> DirTree a) -> DirTree a -> DirTree a
