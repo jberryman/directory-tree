@@ -1,6 +1,6 @@
 --------------------------------------------------------------------
 -- |
--- Module    : System.Directory.DirectoryTree
+-- Module    : System.Directory.Tree
 -- Copyright : (c) Brandon Simmons
 -- License   : BSD3
 --
@@ -20,47 +20,46 @@
 -- 
 -- The AnchoredDirTree type is a simple wrapper for DirTree to keep track 
 -- of a base directory context for the DirTree. 
+--
+-- Please send me any requests, bugs, or other feedback on this module!
 --------------------------------------------------------------------
 
 
 
-module DirectoryTree (-- high level:
-                      readDirectory, readDirectoryWith,
-                      writeDirectory, writeDirectoryWith,
-                      
-                      -- lower level:
-                      zipPaths, build, openDirectory, writeJustDirs, 
-                      
-                      -- utilities:
-                      anyFailed, failures, failedMap, free,
-                      
-                      -- Types:
-                      DirTree (..), AnchoredDirTree (..), FileName)
-    where
+module Tree (
+         
+         -- * Data types for representing directory trees
+         DirTree (..)
+       , AnchoredDirTree (..)
+       , FileName
+ 
+         -- * High level IO functions
+       , readDirectory
+       , readDirectoryWith
+       , writeDirectory
+       , writeDirectoryWith                            
+                                                                        
+         -- * Lower level functions
+       , zipPaths
+       , build
+       , openDirectory
+       , writeJustDirs                 
+                                                                        
+         -- * Utility functions
+         -- ** Handling failure
+       , successful
+       , anyFailed
+       , failures
+       , failedMap
+         -- ** Misc.
+       , free                          
+                                                                        
+    ) where
 
 {- 
 
-NOTES:
-    a simple interface to directories. DirTree's free variable can hold
-    file paths, strings to be written to files in a directory tree, 
-    file-handles, byte-strings read with 'readFile',etc.
-
-    the AnchoredDirTree type is simply a wrapper that allows us to store,
-    and return the base file path of the directory.
-
-    we don't provide many special functions for only working within the 
-    current directory. it should be easy enough to create a DirTree
-    "Anchored" at the current directory like so:
-         anchorAtCurrent dTree = "." :/ dTree
-
-IDEAS:
-    an informal comonad instance might might make sense: for example, cobind 
-    to convert Failed constructors to Files or Dirs, or cojoin to allow us to 
-    use the traversable/foldable functions over an entire File/Failed 
-    constructor.
-    define a 'cojoin' function if you want.
-
 TODO:
+    - add some tests
     - tree combining functions
     - tree searching based on file names
     - look into comonad abstraction
@@ -84,10 +83,11 @@ import qualified Data.Foldable as F
 
 
 
--- the String in Dir is always the directory name, never a full path. We
--- provide functions to convert a DirTree String (where String is a filename)
--- to a DirTree FilePath, where the File constructor holds a full path to a
--- file (relative or absolute) rather than a bare file name.
+-- | the String in the "name" field is always a file name, never a full path.
+-- The free type variable is used in the File constructor and can hold Handles,
+-- Strings representing a file's contents or anything else you can think of.
+-- We catch any IO errors in the Failed constructor. an Exception can be 
+-- converted to a String with 'show'.
 data DirTree a = Dir { name     :: FileName,
                        contents :: [DirTree a]  } --files + directories
                | File { name :: FileName,
@@ -101,14 +101,14 @@ instance (Ord a)=> Ord (DirTree a) where
     compare = compare `on` name
 
 
--- a simple wrapper to hold a base directory name, which can be either 
+-- | a simple wrapper to hold a base directory name, which can be either 
 -- an absolute or relative path. This lets us give the DirTree a context,
 -- while still letting us store only directory and file NAMES (not full paths)
--- in the DirTree.
+-- in the DirTree. (uses an infix constructor; don't be scared)
 data AnchoredDirTree a = FilePath :/ DirTree a
                      deriving (Show, Ord, Eq)
 
--- an element in a FilePath:
+-- | an element in a FilePath:
 type FileName = String
 
 
@@ -132,27 +132,27 @@ instance T.Traversable DirTree where
     ----------------------------
 
 
--- build an AnchoredDirTree, given the path to a directory, opening the files
+-- | build an AnchoredDirTree, given the path to a directory, opening the files
 -- using readFile.
 readDirectory :: FilePath -> IO (AnchoredDirTree String)
 readDirectory = readDirectoryWith readFile
 
--- same as readDirectory but allows us to, for example, use ByteString.readFile
--- to return a tree of ByteStrings.
+-- | same as readDirectory but allows us to, for example, use 
+-- ByteString.readFile to return a tree of ByteStrings.
 readDirectoryWith :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWith f p = do (b:/t) <- build p
                            t'     <- T.mapM f t
                            return $ b:/t'
                         
 
--- write a DirTree of strings to disk. clobbers files of the same name. doesn't
--- affect files in the directories (if any already exist) with different names:
+-- | write a DirTree of strings to disk. clobbers files of the same name. 
+-- doesn't affect files in the directories (if any already exist) with 
+-- different names:
 writeDirectory :: AnchoredDirTree String -> IO ()
 writeDirectory = writeDirectoryWith writeFile
 
--- writes the directory structure to disc, then uses the provided function to 
--- write the contents of Files to disc. For example, we can provide 'readfile'
--- for ByteStrings on a DirTree of ByteStrings.
+-- | writes the directory structure to disc, then uses the provided function to 
+-- write the contents of Files to disc. 
 writeDirectoryWith :: (FilePath -> a -> IO ()) -> AnchoredDirTree a -> IO ()
 writeDirectoryWith f t = do writeJustDirs t
                             F.mapM_ (uncurry f) (zipPaths t)
@@ -166,14 +166,14 @@ writeDirectoryWith f t = do writeJustDirs t
     -----------------------------
 
 
--- a simple application of readDirectoryWith openFile:
+-- | a simple application of readDirectoryWith openFile:
 openDirectory :: FilePath -> IOMode -> IO (AnchoredDirTree Handle)
 openDirectory p m = readDirectoryWith (flip openFile m) p
 
 
 
--- builds a DirTree from the contents of the directory passed to it, saving the
--- base directory in the Anchored* wrapper. Errors are caught in the tree in 
+-- | builds a DirTree from the contents of the directory passed to it, saving 
+-- the base directory in the Anchored* wrapper. Errors are caught in the tree in
 -- the Failed constructor. The 'file' fields initially are populated with full 
 -- paths to the files they are abstracting.
 build :: FilePath -> IO (AnchoredDirTree FilePath)
@@ -198,41 +198,46 @@ build' p =
 
 
 
-
-                     
                                 
     -----------------
     --[ UTILITIES ]--
     -----------------
 
 
--- strips away base directory wrapper:
-free :: AnchoredDirTree a -> DirTree a
-free (_:/t) = t
-
 
 
 
 ---- HANDLING FAILURES ----
 
+-- | True if any Failed constructors in the tree
 anyFailed :: DirTree a -> Bool
-anyFailed = not . null . failures
+anyFailed = not . successful
+
+-- | True if there are no Failed constructors in the tree
+successful :: DirTree a -> Bool
+successful = null . failures
 
 
--- MAKE THIS COMONADIC???
--- returns a list of 'Failed' constructors only:
+-- | returns a list of 'Failed' constructors only:
 failures :: DirTree a -> [DirTree a]
 failures (Dir _ cs) = concatMap failures cs
 failures (File _ _) = []
 failures f          = [f]
 
 
--- maps a function to convert Failed DirTrees to Files or Dirs
+-- | maps a function to convert Failed DirTrees to Files or Dirs
 failedMap :: (FileName -> Exception -> DirTree a) -> DirTree a -> DirTree a
 failedMap f (Dir n cs)   = Dir n $map (failedMap f) cs
 failedMap f (Failed n e) = f n e
 failedMap _ fle          = fle
 
+
+
+---- OTHER ----
+
+-- | strips away base directory wrapper:
+free :: AnchoredDirTree a -> DirTree a
+free (_:/t) = t
 
 
 
@@ -245,7 +250,7 @@ failedMap _ fle          = fle
 
 
 
--- tuple up the complete filename with the File contents, by building up the 
+-- | tuple up the complete filename with the File contents, by building up the 
 -- path, trie-style, from the root. The filepath will be relative to the current
 -- directory.
 -- This allows us to, for example, mapM_ 'uncurry writeFile' over a DirTree of 
@@ -267,7 +272,7 @@ baseDir = joinPath . init . splitDirectories
 ---- IO HELPERS: ----
 
 
--- writes the directory structure (not files) of a DirTree to the anchored 
+-- | writes the directory structure (not files) of a DirTree to the anchored 
 -- directory. can be preparation for writing files:
 writeJustDirs :: AnchoredDirTree a -> IO ()
 writeJustDirs (b:/t) = write' b t
