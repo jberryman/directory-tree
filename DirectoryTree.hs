@@ -1,9 +1,39 @@
-module DirectoryTree (readDirectory, readDirectoryWith,
+--------------------------------------------------------------------
+-- |
+-- Module    : System.Directory.DirectoryTree
+-- Copyright : (c) Brandon Simmons
+-- License   : BSD3
+--
+-- Maintainer:  Brandon Simmons
+-- Stability :  experimental
+-- Portability: portable
+--
+-- Provides a simple data structure mirroring a directory tree on the 
+-- filesystem, as well as useful functions for reading and writing 
+-- file/directory structures in the IO monad.
+-- 
+-- Errors are caught in a special constructor in the DirTree type.
+-- 
+-- Defined instances of Functor, Traversable and Foldable allow for
+-- easily operating on a directory of files. For example, you could use
+-- Foldable.foldr to create a hash of the entire contents of a directory.
+-- 
+-- The AnchoredDirTree type is a simple wrapper for DirTree to keep track 
+-- of a base directory context for the DirTree. 
+--------------------------------------------------------------------
+
+
+
+module DirectoryTree (-- high level:
+                      readDirectory, readDirectoryWith,
                       writeDirectory, writeDirectoryWith,
-                      build, openDirectory, writeJustDirs, 
-                      zipPaths, free,
+                      
+                      -- lower level:
+                      zipPaths, build, openDirectory, writeJustDirs, 
+                      
                       -- utilities:
-                      anyFailed, failures, failedMap,
+                      anyFailed, failures, failedMap, free,
+                      
                       -- Types:
                       DirTree (..), AnchoredDirTree (..), FileName)
     where
@@ -21,7 +51,7 @@ NOTES:
     we don't provide many special functions for only working within the 
     current directory. it should be easy enough to create a DirTree
     "Anchored" at the current directory like so:
-         anchorAtCurrent dTree = "." :/: dTree
+         anchorAtCurrent dTree = "." :/ dTree
 
 IDEAS:
     an informal comonad instance might might make sense: for example, cobind 
@@ -44,7 +74,7 @@ import System.IO
 import Control.Exception (handle, Exception)
 
 import Data.Function (on)
-import Data.List (sort, (\\)) --partition
+import Data.List (sort, (\\))
 import Control.Monad (liftM, filterM, liftM2, ap)
 
 import Control.Applicative
@@ -120,21 +150,15 @@ readDirectoryWith f p = do (b:/t) <- build p
 writeDirectory :: AnchoredDirTree String -> IO ()
 writeDirectory = writeDirectoryWith writeFile
 
--- see: readDirectoryWith
+-- writes the directory structure to disc, then uses the provided function to 
+-- write the contents of Files to disc. For example, we can provide 'readfile'
+-- for ByteStrings on a DirTree of ByteStrings.
 writeDirectoryWith :: (FilePath -> a -> IO ()) -> AnchoredDirTree a -> IO ()
 writeDirectoryWith f t = do writeJustDirs t
                             F.mapM_ (uncurry f) (zipPaths t)
 
 
 
--- a simple application of readDirectoryWith openFile:
-openDirectory :: FilePath -> IOMode -> IO (AnchoredDirTree Handle)
-openDirectory p m = readDirectoryWith (flip openFile m) p
-
-
--- strips away base directory wrapper:
-free :: AnchoredDirTree a -> DirTree a
-free (_:/t) = t
 
 
     -----------------------------
@@ -142,10 +166,16 @@ free (_:/t) = t
     -----------------------------
 
 
+-- a simple application of readDirectoryWith openFile:
+openDirectory :: FilePath -> IOMode -> IO (AnchoredDirTree Handle)
+openDirectory p m = readDirectoryWith (flip openFile m) p
+
+
+
 -- builds a DirTree from the contents of the directory passed to it, saving the
 -- base directory in the Anchored* wrapper. Errors are caught in the tree in 
--- the Failed constructor. The 'file' fields initially contain full paths
--- to the files they are abstracting.
+-- the Failed constructor. The 'file' fields initially are populated with full 
+-- paths to the files they are abstracting.
 build :: FilePath -> IO (AnchoredDirTree FilePath)
 build p = do let base = baseDir p
              tree <- build' p
@@ -174,6 +204,13 @@ build' p =
     -----------------
     --[ UTILITIES ]--
     -----------------
+
+
+-- strips away base directory wrapper:
+free :: AnchoredDirTree a -> DirTree a
+free (_:/t) = t
+
+
 
 
 ---- HANDLING FAILURES ----
