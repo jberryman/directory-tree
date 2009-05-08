@@ -1,7 +1,7 @@
 module Main
     where
 
-import DirectoryTree
+import System.Directory.Tree
 import qualified Data.Foldable as F
 import qualified Data.Traversable as T
 

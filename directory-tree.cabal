@@ -54,3 +54,4 @@ extra-source-files: examples.hs
 library
     exposed-modules: System.Directory.Tree
     build-depends: base
+    ghc-options:       -Wall
