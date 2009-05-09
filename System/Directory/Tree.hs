@@ -1,16 +1,17 @@
+
 --------------------------------------------------------------------
 -- |
 -- Module    : System.Directory.Tree
 -- Copyright : (c) Brandon Simmons
 -- License   : BSD3
 --
--- Maintainer:  Brandon Simmons
+-- Maintainer:  Brandon Simmons <brandon.m.simmons@gmail.com>
 -- Stability :  experimental
 -- Portability: portable
 --
 -- Provides a simple data structure mirroring a directory tree on the 
 -- filesystem, as well as useful functions for reading and writing 
--- file/directory structures in the IO monad.
+-- file and directory structures in the IO monad. 
 -- 
 -- Errors are caught in a special constructor in the DirTree type.
 -- 
@@ -22,48 +23,44 @@
 -- of a base directory context for the DirTree. 
 --
 -- Please send me any requests, bugs, or other feedback on this module!
+--
 --------------------------------------------------------------------
-
-
 
 module System.Directory.Tree (
          
-         -- * Data types for representing directory trees
+       -- * Data types for representing directory trees
          DirTree (..)
        , AnchoredDirTree (..)
        , FileName
  
-         -- * High level IO functions
+       -- * High level IO functions
        , readDirectory
        , readDirectoryWith
        , writeDirectory
        , writeDirectoryWith                            
                                                                         
-         -- * Lower level functions
+       -- * Lower level functions
        , zipPaths
        , build
        , openDirectory
        , writeJustDirs                 
                                                                         
-         -- * Utility functions
-         -- ** Handling failure
+       -- * Utility functions
+       -- ** Handling failure
        , successful
        , anyFailed
        , failures
        , failedMap
-         -- ** Misc.
+       -- ** Misc.
        , free                          
-                                                                        
     ) where
 
 {- 
-
 TODO:
     - add some tests
     - tree combining functions
     - tree searching based on file names
     - look into comonad abstraction
-
 -}
 
 
@@ -83,13 +80,13 @@ import qualified Data.Foldable as F
 
 
 
--- | the String in the "name" field is always a file name, never a full path.
+-- | the String in the name field is always a file name, never a full path.
 -- The free type variable is used in the File constructor and can hold Handles,
 -- Strings representing a file's contents or anything else you can think of.
 -- We catch any IO errors in the Failed constructor. an Exception can be 
 -- converted to a String with 'show'.
 data DirTree a = Dir { name     :: FileName,
-                       contents :: [DirTree a]  } --files + directories
+                       contents :: [DirTree a]  } 
                | File { name :: FileName,
                         file :: a }
                | Failed { name :: FileName,
