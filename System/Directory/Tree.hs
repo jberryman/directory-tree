@@ -71,7 +71,6 @@ import Control.Exception (handle, Exception)
 
 import Data.Function (on)
 import Data.List (sort, (\\))
-import Control.Monad (liftM, filterM, liftM2, ap)
 
 import Control.Applicative
 import qualified Data.Traversable as T
@@ -118,7 +117,7 @@ instance F.Foldable DirTree where
 instance T.Traversable DirTree where
     traverse f (Dir n cs)   = Dir n <$> T.traverse (T.traverse f) cs
     traverse f (File n a)   = File n <$> f a
-    traverse f (Failed n e) = pure (Failed n e)
+    traverse _ (Failed n e) = pure (Failed n e)
 
 
 
@@ -256,12 +255,12 @@ zipPaths :: AnchoredDirTree a -> DirTree (FilePath, a)
 zipPaths (b :/ t) = zipP b t
     where zipP p (File n a)   = File n (p</>n , a)
           zipP p (Dir n cs)   = Dir n $ map (zipP $ p</>n) cs
-          zipP p (Failed n e) = Failed n e
+          zipP _ (Failed n e) = Failed n e
 
 
 -- extracting pathnames and base names:
+topDir, baseDir :: FilePath -> FilePath
 topDir = last . splitDirectories 
-
 baseDir = joinPath . init . splitDirectories
 
 
@@ -283,6 +282,7 @@ writeJustDirs (b:/t) = write' b t
 ----- and getDirectoryContents fails epically on ""
 -- prepares the directory contents list. we sort so that we can be sure of 
 -- a consistent fold/traversal order on the same directory:
+getDirsFiles :: String -> IO [FilePath]
 getDirsFiles cs = do let cs' = if null cs then "." else cs 
                      dfs <- getDirectoryContents cs'
                      return $ sort $ dfs \\ [".",".."]

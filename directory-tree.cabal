@@ -1,5 +1,5 @@
 name:            directory-tree
-version:         0.1
+version:         0.1.1
 homepage:        http://coder.bsimmons.name/blog/2009/05/directory-tree-module-released/
 synopsis:        A simple directory-like tree datatype, with useful IO functions 
 description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  
@@ -56,5 +56,5 @@ extra-source-files: examples.hs
 
 library
     exposed-modules: System.Directory.Tree
-    build-depends: base
+    build-depends: base, filepath, directory
     ghc-options:       -Wall
