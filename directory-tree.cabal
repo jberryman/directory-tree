@@ -1,5 +1,5 @@
 name:            directory-tree
-version:         0.1.1
+version:         0.2.0
 homepage:        http://coder.bsimmons.name/blog/2009/05/directory-tree-module-released/
 synopsis:        A simple directory-like tree datatype, with useful IO functions 
 description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  
@@ -45,16 +45,16 @@ description:     A simple directory-like tree datatype, with useful IO functions
 category:        Data, System
 license:         BSD3
 license-file:    LICENSE
-copyright:       (c) 2009, Brandon Simmons <brandon.m.simmons@gmail.com>
+copyright:       (c) 2010, Brandon Simmons <brandon.m.simmons@gmail.com>
 author:          Brandon Simmons
 maintainer:      Brandon Simmons <brandon.m.simmons@gmail.com>
 cabal-version:   >= 1.2.0
 build-type:      Simple
-tested-with:     GHC ==6.8.2
+tested-with:     GHC <=6.12.1
 extra-source-files: examples.hs
 
 
 library
     exposed-modules: System.Directory.Tree
-    build-depends: base, filepath, directory
+    build-depends: base <5, filepath <2, directory <2
     ghc-options:       -Wall

@@ -67,7 +67,7 @@ TODO:
 import System.Directory
 import System.FilePath
 import System.IO
-import Control.Exception (handle, Exception)
+import Control.Exception (handle, IOException)
 
 import Data.Function (on)
 import Data.List (sort, (\\))
@@ -89,7 +89,7 @@ data DirTree a = Dir { name     :: FileName,
                | File { name :: FileName,
                         file :: a }
                | Failed { name :: FileName,
-                          err  :: Exception }
+                          err  :: IOException }
                  deriving (Show, Eq)
 
 
@@ -222,7 +222,7 @@ failures f          = [f]
 
 
 -- | maps a function to convert Failed DirTrees to Files or Dirs
-failedMap :: (FileName -> Exception -> DirTree a) -> DirTree a -> DirTree a
+failedMap :: (FileName -> IOException -> DirTree a) -> DirTree a -> DirTree a
 failedMap f (Dir n cs)   = Dir n $map (failedMap f) cs
 failedMap f (Failed n e) = f n e
 failedMap _ fle          = fle
