@@ -1,5 +1,5 @@
 name:            directory-tree
-version:         0.2.0
+version:         0.2.0.1
 homepage:        http://coder.bsimmons.name/blog/2009/05/directory-tree-module-released/
 synopsis:        A simple directory-like tree datatype, with useful IO functions 
 description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  
@@ -39,7 +39,12 @@ description:     A simple directory-like tree datatype, with useful IO functions
  > import qualified Data.ByteString.Lazy as B
  > do (_ :/ dTree) <- readDirectoryWith B.readFile "./"     
  .
- Please send me any comments, requests or bug reports
+ *NOTE:* the IO functions like `readDirectoryWith` in this library use standard lazy IO 
+ IOfunctions and will (necessarily) traverse an entire system directory tree before
+ returning a DirTree constructor. This unfortunately makes it not suitable for large
+ directory trees.
+ 
+ Any ideas or suggestions for improvements would be most welcomed :-)
  .
  
 category:        Data, System

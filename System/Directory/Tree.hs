@@ -57,6 +57,11 @@ module System.Directory.Tree (
 
 {- 
 TODO:
+    - add whatever needed to make an efficient 'du' simple
+        - look at using 'withFile' ?
+        - strictness ? what does this do when called on a big 
+          directory tree and we only use the top level ?
+
     - add some tests
     - tree combining functions
     - tree searching based on file names
@@ -129,7 +134,10 @@ instance T.Traversable DirTree where
 
 
 -- | build an AnchoredDirTree, given the path to a directory, opening the files
--- using readFile.
+-- using readFile. 
+-- Uses `readDirectoryWith` internally and has the effect of traversing the
+-- entire directory structure, and is not suitable for running on large 
+-- directory trees (suggestions or patches welcomed):
 readDirectory :: FilePath -> IO (AnchoredDirTree String)
 readDirectory = readDirectoryWith readFile
 
