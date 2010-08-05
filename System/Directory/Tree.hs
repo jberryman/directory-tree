@@ -49,6 +49,7 @@ module System.Directory.Tree (
        -- ** Handling failure
        , successful
        , anyFailed
+       , failed
        , failures
        , failedMap
        -- ** Misc.
@@ -73,8 +74,9 @@ import System.Directory
 import System.FilePath
 import System.IO
 import Control.Exception (handle, IOException)
+import System.IO.Error(ioeGetErrorType,isDoesNotExistErrorType)
 
-import Data.Function (on)
+import Data.Ord (comparing)
 import Data.List (sort, (\\))
 
 import Control.Applicative
@@ -99,7 +101,7 @@ data DirTree a = Dir { name     :: FileName,
 
 
 instance (Ord a)=> Ord (DirTree a) where
-    compare = compare `on` name
+    compare = comparing name
 
 
 -- | a simple wrapper to hold a base directory name, which can be either 
@@ -136,8 +138,8 @@ instance T.Traversable DirTree where
 -- | build an AnchoredDirTree, given the path to a directory, opening the files
 -- using readFile. 
 -- Uses `readDirectoryWith` internally and has the effect of traversing the
--- entire directory structure, and is not suitable for running on large 
--- directory trees (suggestions or patches welcomed):
+-- entire directory structure, so is not suitable for running on large directory
+-- trees (suggestions or patches welcomed):
 readDirectory :: FilePath -> IO (AnchoredDirTree String)
 readDirectory = readDirectoryWith readFile
 
@@ -183,7 +185,11 @@ openDirectory p m = readDirectoryWith (flip openFile m) p
 build :: FilePath -> IO (AnchoredDirTree FilePath)
 build p = do let base = baseDir p
              tree <- build' p
-             return (base :/ tree)
+              -- we make sure the directory tree is free of non-existent
+              -- file errors, which are artifacts of the "non-atomic"
+              -- nature of traversing a system firectory tree.
+             let treeClean = removeNonexistent tree
+             return (base :/ treeClean)
                      
 -- HELPER: not exported:
 build' :: FilePath -> IO (DirTree FilePath)
@@ -210,7 +216,6 @@ build' p =
 
 
 
-
 ---- HANDLING FAILURES ----
 
 -- | True if any Failed constructors in the tree
@@ -220,6 +225,11 @@ anyFailed = not . successful
 -- | True if there are no Failed constructors in the tree
 successful :: DirTree a -> Bool
 successful = null . failures
+
+
+-- | returns true if argument is a `Failed` constructor:
+failed (Failed _ _) = True
+failed _            = False
 
 
 -- | returns a list of 'Failed' constructors only:
@@ -294,3 +304,18 @@ getDirsFiles :: String -> IO [FilePath]
 getDirsFiles cs = do let cs' = if null cs then "." else cs 
                      dfs <- getDirectoryContents cs'
                      return $ sort $ dfs \\ [".",".."]
+
+
+
+-- DoesNotExist errors not present at the topmost level could happen if a
+-- named file or directory is deleted after being listed by 
+-- getDirectoryContents but before we can get it into memory. 
+--    So we filter those errors out because the user should not see errors 
+-- raised by the internal implementation of this module:
+--     This leaves the error if it exists in the top (user-supplied) level:
+removeNonexistent (Dir n c) = 
+    Dir n $ map removeNonexistent $ filter isOkConstructor c
+        
+     where isOkConstructor c = not (failed c) || isOkError c
+           isOkError = not . isDoesNotExistErrorType . ioeGetErrorType . err
+removeNonexistent f = f
