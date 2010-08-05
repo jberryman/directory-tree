@@ -228,6 +228,7 @@ successful = null . failures
 
 
 -- | returns true if argument is a `Failed` constructor:
+failed :: DirTree a -> Bool
 failed (Failed _ _) = True
 failed _            = False
 
@@ -313,8 +314,9 @@ getDirsFiles cs = do let cs' = if null cs then "." else cs
 --    So we filter those errors out because the user should not see errors 
 -- raised by the internal implementation of this module:
 --     This leaves the error if it exists in the top (user-supplied) level:
-removeNonexistent (Dir n c) = 
-    Dir n $ map removeNonexistent $ filter isOkConstructor c
+removeNonexistent :: DirTree a -> DirTree a
+removeNonexistent (Dir n cs) = 
+    Dir n $ map removeNonexistent $ filter isOkConstructor cs
         
      where isOkConstructor c = not (failed c) || isOkError c
            isOkError = not . isDoesNotExistErrorType . ioeGetErrorType . err
