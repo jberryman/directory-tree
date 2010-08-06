@@ -52,16 +52,22 @@ module System.Directory.Tree (
        , failed
        , failures
        , failedMap
-       -- ** Misc.
+       -- ** Tree Manipulations:
+       , flattenDir
+       , filterDir
        , free                          
     ) where
 
 {- 
 TODO:
     - add whatever needed to make an efficient 'du' simple
-        - look at using 'withFile' ?
-        - strictness ? what does this do when called on a big 
-          directory tree and we only use the top level ?
+        - create a Lazy version that uses unsafePerformIO under the hood
+    - "lift" failures from IO functions passed to `readDirectoryWith` into
+      a Failed constructor (is this a good idea ??) I think this is a great 
+      idea as long as we mention it in the docs.
+        - move `removeNonexistent` behind the passed IO function call, so we
+          prune out those that disappeared right before we tried to 'read' them
+          with our passed function.
 
     - add some tests
     - tree combining functions
@@ -78,6 +84,7 @@ import System.IO.Error(ioeGetErrorType,isDoesNotExistErrorType)
 
 import Data.Ord (comparing)
 import Data.List (sort, (\\))
+import Data.Maybe (mapMaybe)
 
 import Control.Applicative
 import qualified Data.Traversable as T
@@ -235,16 +242,15 @@ failed _            = False
 
 -- | returns a list of 'Failed' constructors only:
 failures :: DirTree a -> [DirTree a]
-failures (Dir _ cs) = concatMap failures cs
-failures (File _ _) = []
-failures f          = [f]
+failures = filter failed . flattenDir 
 
 
 -- | maps a function to convert Failed DirTrees to Files or Dirs
 failedMap :: (FileName -> IOException -> DirTree a) -> DirTree a -> DirTree a
-failedMap f (Dir n cs)   = Dir n $map (failedMap f) cs
-failedMap f (Failed n e) = f n e
-failedMap _ fle          = fle
+failedMap f = mapMaybeDir (Just . unFail)
+    where unFail (Failed n e) = f n e
+          unFail c            = c
+                          
 
 
 
@@ -308,6 +314,10 @@ getDirsFiles cs = do let cs' = if null cs then "." else cs
 
 
 
+
+    -- -- -- don't export these:
+
+
 -- DoesNotExist errors not present at the topmost level could happen if a
 -- named file or directory is deleted after being listed by 
 -- getDirectoryContents but before we can get it into memory. 
@@ -315,9 +325,29 @@ getDirsFiles cs = do let cs' = if null cs then "." else cs
 -- raised by the internal implementation of this module:
 --     This leaves the error if it exists in the top (user-supplied) level:
 removeNonexistent :: DirTree a -> DirTree a
-removeNonexistent (Dir n cs) = 
-    Dir n $ map removeNonexistent $ filter isOkConstructor cs
-        
+removeNonexistent = filterDir isOkConstructor
      where isOkConstructor c = not (failed c) || isOkError c
            isOkError = not . isDoesNotExistErrorType . ioeGetErrorType . err
-removeNonexistent f = f
+
+
+-- at Dir constructor, apply transformation function to all of directory's
+-- contents, then remove the Nothing's and recurse. ALWAYS PRESERVES TOPMOST
+-- CONSTRUCTOR:
+mapMaybeDir :: (DirTree a -> Maybe (DirTree a)) -> DirTree a -> DirTree a
+mapMaybeDir f (Dir n cs) = Dir n $ map (mapMaybeDir f) $ mapMaybe f cs
+mapMaybeDir _ d = d
+
+
+-- | applies the predicate to each constructor in the tree, removing it (and
+-- its children, of course) when the predicate returns False. The topmost 
+-- constructor will always be preserved:
+filterDir :: (DirTree a -> Bool) -> DirTree a -> DirTree a
+filterDir p = mapMaybeDir (\d-> if p d then Just d else Nothing)
+
+
+-- | Flattens a `DirTree` into a (never empty) list of tree constructors. `Dir`
+-- constructors will have [] as their `contents`:
+flattenDir :: DirTree a -> [ DirTree a ]
+flattenDir (Dir n cs) = Dir n [] : concatMap flattenDir cs
+flattenDir f          = [f]
+
