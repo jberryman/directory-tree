@@ -36,12 +36,14 @@ module System.Directory.Tree (
        -- * High level IO functions
        , readDirectory
        , readDirectoryWith
+       , readDirectoryWithL
        , writeDirectory
        , writeDirectoryWith                            
                                                                         
        -- * Lower level functions
        , zipPaths
        , build
+       , buildL
        , openDirectory
        , writeJustDirs                 
                                                                         
@@ -69,12 +71,33 @@ TODO:
           prune out those that disappeared right before we tried to 'read' them
           with our passed function.
 
+    - performance tests of lazy/unsafe traversal required
+
     - add some tests
     - tree combining functions
     - tree searching based on file names
     - look into comonad abstraction
--}
 
+    THE FUTURE!:
+        -`par` annotations for multithreaded directory traversal(?)
+
+-}
+{-
+CHANGES:
+    0.3.0
+        -lift errors from IO functions passed to `readDirectoryWith` into
+          a Failed DirTree constructor
+        -remove does not exist errors from DirTrees returned by `read*` 
+          functions
+        -add lazy `readDirectoryWithL` function which uses unsafePerformIO
+          internally (and safely, we hope) to do DirTree-producing IO as
+          needed by consuming function
+        -writeDirectory now returns a DirTree to reflect what was written
+          successfully to Disk. This lets us inspect for write failures with
+          (passed_DirTree == returned_DirTree) and easily inspect failures in 
+          the returned DirTree
+
+-}
 
 import System.Directory
 import System.FilePath
@@ -90,6 +113,8 @@ import Control.Applicative
 import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 
+-- exported functions affected: `buildL`, `readDirectoryWithL`
+import System.IO.Unsafe(unsafePerformIO)   
 
 
 
@@ -145,18 +170,28 @@ instance T.Traversable DirTree where
 -- | build an AnchoredDirTree, given the path to a directory, opening the files
 -- using readFile. 
 -- Uses `readDirectoryWith` internally and has the effect of traversing the
--- entire directory structure, so is not suitable for running on large directory
--- trees (suggestions or patches welcomed):
+-- entire directory structure. See `readDirectoryWithL` for lazy production
+-- of a DirTree structure.
 readDirectory :: FilePath -> IO (AnchoredDirTree String)
 readDirectory = readDirectoryWith readFile
 
 -- | same as readDirectory but allows us to, for example, use 
 -- ByteString.readFile to return a tree of ByteStrings.
 readDirectoryWith :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
-readDirectoryWith f p = do (b:/t) <- build p
-                           t'     <- T.mapM f t
-                           return $ b:/t'
-                        
+readDirectoryWith f p = do (b:/t) <- buildAtOnce f p
+                           let t' = removeNonexistent t
+                           return ( b:/t') 
+
+
+-- | A "lazy" version of `readDirectoryWith` that does IO operations as needed
+-- i.e. as the tree is traversed in pure code.
+-- /NOTE:/ This function uses unsafePerformIO under the hood. I believe our use
+-- here is safe, but this function is experimental in this release:
+readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
+readDirectoryWithL f p = do (b:/t) <- buildLazilyUnsafe f p
+                            let t' = removeNonexistent t
+                            return ( b:/t') 
+
 
 -- | write a DirTree of strings to disk. clobbers files of the same name. 
 -- doesn't affect files in the directories (if any already exist) with 
@@ -190,28 +225,72 @@ openDirectory p m = readDirectoryWith (flip openFile m) p
 -- the Failed constructor. The 'file' fields initially are populated with full 
 -- paths to the files they are abstracting.
 build :: FilePath -> IO (AnchoredDirTree FilePath)
-build p = do let base = baseDir p
-             tree <- build' p
-              -- we make sure the directory tree is free of non-existent
-              -- file errors, which are artifacts of the "non-atomic"
-              -- nature of traversing a system firectory tree.
-             let treeClean = removeNonexistent tree
-             return (base :/ treeClean)
-                     
--- HELPER: not exported:
-build' :: FilePath -> IO (DirTree FilePath)
-build' p = 
+build = buildAtOnce return   -- we say 'return' here to get 
+                             -- back a  tree  of  FilePaths
+
+
+-- | identical to `build` but does directory reading IO lazily as needed:
+buildL :: FilePath -> IO (AnchoredDirTree FilePath)
+buildL = buildLazilyUnsafe return   
+                           
+
+
+    -- -- -- helpers: -- -- --
+
+
+buildAtOnce :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
+buildAtOnce f p = 
+    do let base = baseDir p
+       tree <- buildAtOnce' f p
+        -- remove non-existent file errors, which are artifacts of the 
+        -- "non-atomic" nature of traversing a system firectory tree:
+       let treeClean = removeNonexistent tree
+       return (base :/ treeClean)
+                    
+
+
+-- IO function passed to our builder and finally executed here:
+buildAtOnce' :: (FilePath -> IO a) -> FilePath -> IO (DirTree a)
+buildAtOnce' f p = 
     handle (return . Failed n) $ 
            do isFile <- doesFileExist p    
               if isFile                         
                   -- store full path to the file in 'file' field:
-                 then return (File n p)              
+                 then  File n <$> f p
                   -- else is directory, build a Dir from contents:
                  else do cs <- getDirsFiles p
-                         Dir n <$> T.mapM (build' . combine p) cs
+                         Dir n <$> T.mapM (buildAtOnce' f . combine p) cs
       -- the directory to build, located under "base":
      where n = topDir p
 
+
+
+
+ -- -- versions using unsafePerformIO to get "lazy" traversal -- --
+
+
+-- got some splainin' to do:
+buildLazilyUnsafe :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
+buildLazilyUnsafe f p = 
+    do let base = baseDir p
+       tree <- buildLazilyUnsafe' f p
+       let treeClean = removeNonexistent tree
+       return (base :/ treeClean)
+
+
+buildLazilyUnsafe' :: (FilePath -> IO a) -> FilePath -> IO (DirTree a)
+buildLazilyUnsafe' f p = 
+    handle (return . Failed n) $ 
+           do isFile <- doesFileExist p    
+              if isFile                         
+                 then  File n <$> f p
+
+                  -- HERE IS THE UNSAFE CODE:
+                 else let cs = unsafePerformIO $ getDirsFiles p --unsafeInterleaveIO here???
+                       in return $ Dir n $ fmap (rec . combine p) cs 
+                      
+     where rec = unsafePerformIO . buildLazilyUnsafe' f
+           n = topDir p
 
 
 
@@ -256,9 +335,24 @@ failedMap f = mapMaybeDir (Just . unFail)
 
 ---- OTHER ----
 
+
 -- | strips away base directory wrapper:
 free :: AnchoredDirTree a -> DirTree a
 free (_:/t) = t
+
+
+-- | applies the predicate to each constructor in the tree, removing it (and
+-- its children, of course) when the predicate returns False. The topmost 
+-- constructor will always be preserved:
+filterDir :: (DirTree a -> Bool) -> DirTree a -> DirTree a
+filterDir p = mapMaybeDir (\d-> if p d then Just d else Nothing)
+
+
+-- | Flattens a `DirTree` into a (never empty) list of tree constructors. `Dir`
+-- constructors will have [] as their `contents`:
+flattenDir :: DirTree a -> [ DirTree a ]
+flattenDir (Dir n cs) = Dir n [] : concatMap flattenDir cs
+flattenDir f          = [f]
 
 
 
@@ -336,18 +430,4 @@ removeNonexistent = filterDir isOkConstructor
 mapMaybeDir :: (DirTree a -> Maybe (DirTree a)) -> DirTree a -> DirTree a
 mapMaybeDir f (Dir n cs) = Dir n $ map (mapMaybeDir f) $ mapMaybe f cs
 mapMaybeDir _ d = d
-
-
--- | applies the predicate to each constructor in the tree, removing it (and
--- its children, of course) when the predicate returns False. The topmost 
--- constructor will always be preserved:
-filterDir :: (DirTree a -> Bool) -> DirTree a -> DirTree a
-filterDir p = mapMaybeDir (\d-> if p d then Just d else Nothing)
-
-
--- | Flattens a `DirTree` into a (never empty) list of tree constructors. `Dir`
--- constructors will have [] as their `contents`:
-flattenDir :: DirTree a -> [ DirTree a ]
-flattenDir (Dir n cs) = Dir n [] : concatMap flattenDir cs
-flattenDir f          = [f]
 
