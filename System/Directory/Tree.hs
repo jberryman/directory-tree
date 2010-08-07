@@ -64,12 +64,6 @@ module System.Directory.Tree (
 TODO:
     - add whatever needed to make an efficient 'du' simple
         - create a Lazy version that uses unsafePerformIO under the hood
-    - "lift" failures from IO functions passed to `readDirectoryWith` into
-      a Failed constructor (is this a good idea ??) I think this is a great 
-      idea as long as we mention it in the docs.
-        - move `removeNonexistent` behind the passed IO function call, so we
-          prune out those that disappeared right before we tried to 'read' them
-          with our passed function.
 
     - performance tests of lazy/unsafe traversal required
 
@@ -178,7 +172,7 @@ readDirectory = readDirectoryWith readFile
 -- | same as readDirectory but allows us to, for example, use 
 -- ByteString.readFile to return a tree of ByteStrings.
 readDirectoryWith :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
-readDirectoryWith f p = do (b:/t) <- buildAtOnce f p
+readDirectoryWith f p = do (b:/t) <- buildWith' buildAtOnce' f p
                            let t' = removeNonexistent t
                            return ( b:/t') 
 
@@ -188,7 +182,7 @@ readDirectoryWith f p = do (b:/t) <- buildAtOnce f p
 -- /NOTE:/ This function uses unsafePerformIO under the hood. I believe our use
 -- here is safe, but this function is experimental in this release:
 readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
-readDirectoryWithL f p = do (b:/t) <- buildLazilyUnsafe f p
+readDirectoryWithL f p = do (b:/t) <- buildWith' buildLazilyUnsafe' f p
                             let t' = removeNonexistent t
                             return ( b:/t') 
 
@@ -225,23 +219,26 @@ openDirectory p m = readDirectoryWith (flip openFile m) p
 -- the Failed constructor. The 'file' fields initially are populated with full 
 -- paths to the files they are abstracting.
 build :: FilePath -> IO (AnchoredDirTree FilePath)
-build = buildAtOnce return   -- we say 'return' here to get 
+build = buildWith' buildAtOnce' return   -- we say 'return' here to get 
                              -- back a  tree  of  FilePaths
 
 
 -- | identical to `build` but does directory reading IO lazily as needed:
 buildL :: FilePath -> IO (AnchoredDirTree FilePath)
-buildL = buildLazilyUnsafe return   
-                           
+buildL = buildWith' buildLazilyUnsafe' return   
+                       
+
 
 
     -- -- -- helpers: -- -- --
 
 
-buildAtOnce :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
-buildAtOnce f p = 
+type Builder a = (FilePath -> IO a) -> FilePath -> IO (DirTree a)
+
+buildWith' :: Builder a -> (FilePath->IO a) -> FilePath -> IO (AnchoredDirTree a)
+buildWith' bf' f p = 
     do let base = baseDir p
-       tree <- buildAtOnce' f p
+       tree <- bf' f p
         -- remove non-existent file errors, which are artifacts of the 
         -- "non-atomic" nature of traversing a system firectory tree:
        let treeClean = removeNonexistent tree
@@ -266,16 +263,8 @@ buildAtOnce' f p =
 
 
 
- -- -- versions using unsafePerformIO to get "lazy" traversal -- --
+  -- -- using unsafePerformIO to get "lazy" traversal -- --
 
-
--- got some splainin' to do:
-buildLazilyUnsafe :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
-buildLazilyUnsafe f p = 
-    do let base = baseDir p
-       tree <- buildLazilyUnsafe' f p
-       let treeClean = removeNonexistent tree
-       return (base :/ treeClean)
 
 
 buildLazilyUnsafe' :: (FilePath -> IO a) -> FilePath -> IO (DirTree a)
