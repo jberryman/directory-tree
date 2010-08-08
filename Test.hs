@@ -50,13 +50,14 @@ main = do
 
      -- get a lazy DirTree at root directory with lazy Directory traversal:
     putStrLn "If you can read this before script exits, lazy Dir IO is borkin"
-    mapM_ putStr =<< (map name . contents . free) <$>  buildL "/"
+    mapM_ putStr =<< (map name . contents . free) <$> readDirectoryWithL readFile "/"
     putStrLn "\nOK"
 
     -- clean up by removing the directory:
     system$ "rm -r " ++ testDir
     putStrLn "SUCCESS"
     
+
 
 testTree :: AnchoredDirTree String
 testTree = "" :/ Dir testDir [dA , dB , dC , Failed "FAAAIIILL" undefined]

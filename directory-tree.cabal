@@ -39,12 +39,17 @@ description:     A simple directory-like tree datatype, with useful IO functions
  > import qualified Data.ByteString.Lazy as B
  > do (_ :/ dTree) <- readDirectoryWith B.readFile "./"     
  .
- *NOTE: the IO functions like `readDirectoryWith` in this library use standard lazy
- IO functions and will (necessarily) traverse an entire system directory tree before
- returning a DirTree constructor. This unfortunately makes it not suitable for large
- directory trees.
+ This version also offers an experimental function `readDirectoryWithL` that does
+ lazy directory IO, allowing you to treat the returned `DirTree` as if it were a
+ normal lazily-generated data structure.
+ .
+ For example, the following does only the amount of IO necessary to list the file
+ names of the children of the root directory, similar to "ls /":
+ .
+ > do d <- readDirectoryWithL readFile "/"
+ >    mapM_ (putStrLn . name) $ contents $ free d
  . 
- Any ideas or suggestions for improvements would be most welcomed :-)
+ Any ideas or suggestions for improvements are most welcome :-)
  .
  
 category:        Data, System

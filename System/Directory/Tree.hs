@@ -62,12 +62,10 @@ module System.Directory.Tree (
 
 {- 
 TODO:
-    - add whatever needed to make an efficient 'du' simple
-        - create a Lazy version that uses unsafePerformIO under the hood
-
+   NOW!!!:
     - performance tests of lazy/unsafe traversal required
 
-    - add some tests
+   NEXT MAYBE:
     - tree combining functions
     - tree searching based on file names
     - look into comonad abstraction
@@ -79,8 +77,6 @@ TODO:
 {-
 CHANGES:
     0.3.0
-        -lift errors from IO functions passed to `readDirectoryWith` into
-          a Failed DirTree constructor
         -remove does not exist errors from DirTrees returned by `read*` 
           functions
         -add lazy `readDirectoryWithL` function which uses unsafePerformIO
@@ -90,7 +86,6 @@ CHANGES:
           successfully to Disk. This lets us inspect for write failures with
           (passed_DirTree == returned_DirTree) and easily inspect failures in 
           the returned DirTree
-
 -}
 
 import System.Directory
@@ -107,7 +102,7 @@ import Control.Applicative
 import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 
--- exported functions affected: `buildL`, `readDirectoryWithL`
+ -- exported functions affected: `buildL`, `readDirectoryWithL`
 import System.IO.Unsafe(unsafePerformIO)   
 
 
@@ -235,7 +230,7 @@ buildL = buildWith' buildLazilyUnsafe' return
 
 type Builder a = (FilePath -> IO a) -> FilePath -> IO (DirTree a)
 
-buildWith' :: Builder a -> (FilePath->IO a) -> FilePath -> IO (AnchoredDirTree a)
+buildWith' :: Builder a -> (FilePath->IO a)-> FilePath -> IO (AnchoredDirTree a)
 buildWith' bf' f p = 
     do let base = baseDir p
        tree <- bf' f p
@@ -266,17 +261,14 @@ buildAtOnce' f p =
   -- -- using unsafePerformIO to get "lazy" traversal -- --
 
 
-
 buildLazilyUnsafe' :: (FilePath -> IO a) -> FilePath -> IO (DirTree a)
 buildLazilyUnsafe' f p = 
     handle (return . Failed n) $ 
            do isFile <- doesFileExist p    
               if isFile                         
                  then  File n <$> f p
-
-                  -- HERE IS THE UNSAFE CODE:
-                 else let cs = unsafePerformIO $ getDirsFiles p --unsafeInterleaveIO here???
-                       in return $ Dir n $ fmap (rec . combine p) cs 
+           -- HERE IS THE UNSAFE CODE:
+                 else Dir n . fmap (rec . combine p) <$> getDirsFiles p
                       
      where rec = unsafePerformIO . buildLazilyUnsafe' f
            n = topDir p
