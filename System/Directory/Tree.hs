@@ -195,15 +195,19 @@ readDirectoryWithL f p = do (b:/t) <- buildWith' buildLazilyUnsafe' f p
                             return ( b:/t') 
 
 
--- | write a DirTree of strings to disk. clobbers files of the same name. 
--- doesn't affect files in the directories (if any already exist) with 
--- different names:
+-- | write a DirTree of strings to disk. Clobbers files of the same name. 
+-- Doesn't affect files in the directories (if any already exist) with 
+-- different names. Returns a new AnchoredDirTree where failures were
+-- lifted into a `Failed` constructor:
 writeDirectory :: AnchoredDirTree String -> IO (AnchoredDirTree ())
 writeDirectory = writeDirectoryWith writeFile
 
 
--- | writes the directory structure to disc, then uses the provided function to 
--- write the contents of Files to disc. 
+-- | writes the directory structure to disk and uses the provided function to 
+-- write the contents of `Files` to disk. The return value of the function will
+-- become the new `contents` of the returned, where IO errors at each node are
+-- replaced with `Failed` constructors. The returned tree can be compared to
+-- the passed tree to see what operations, if any, failed:
 writeDirectoryWith :: (FilePath -> a -> IO b) -> AnchoredDirTree a -> IO (AnchoredDirTree b)
 writeDirectoryWith f (b:/t) = (b:/) <$> write' b t
     where write' b' (File n a) = handleDT n $ 
