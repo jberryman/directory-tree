@@ -1,4 +1,4 @@
-module LazyExamples
+module Main
     where
 
 import System.Directory.Tree
@@ -31,6 +31,6 @@ ls d = do (_ :/ Dir _ c) <- readDirectoryWithL readFile d
 -- under the supplied directory. We use a more compositional style here, where 
 -- (<=<) is equivalent to (.) but for monadic functions (a -> m b):
 du :: FileName -> IO ()
-du = print . F.sum . free <=< readDirectoryWithL (hFileSize <=< readHs) 
+du = print . F.foldl' (+) 0 . free <=< readDirectoryWithL (hFileSize <=< readHs)
     where readHs = flip openFile ReadMode       
 

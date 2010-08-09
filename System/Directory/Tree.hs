@@ -67,8 +67,9 @@ module System.Directory.Tree (
 
 {- 
 TODO:
-   NOW!!!:
-    - performance tests of lazy/unsafe traversal required
+   NEXT:
+    - performance improvements, we want lazy dir functions to run in constant
+       space if possible.
 
    NEXT MAYBE:
     - tree combining functions

@@ -1,4 +1,4 @@
-module Test
+module Main
     where
 
 -- do a quick test for Darcs:
