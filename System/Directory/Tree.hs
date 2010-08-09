@@ -91,6 +91,7 @@ CHANGES:
           successfully to Disk. This lets us inspect for write failures with
           (passed_DirTree == returned_DirTree) and easily inspect failures in 
           the returned DirTree
+        -added functor instance for the AnchoredDirTree type
 -}
 
 import System.Directory
@@ -154,6 +155,12 @@ instance T.Traversable DirTree where
 
 
 
+-- for convenience:
+instance Functor AnchoredDirTree where
+    fmap f (b:/d) = b :/ fmap f d
+
+
+
 
    
     ----------------------------
@@ -191,15 +198,23 @@ readDirectoryWithL f p = do (b:/t) <- buildWith' buildLazilyUnsafe' f p
 -- | write a DirTree of strings to disk. clobbers files of the same name. 
 -- doesn't affect files in the directories (if any already exist) with 
 -- different names:
-writeDirectory :: AnchoredDirTree String -> IO ()
+writeDirectory :: AnchoredDirTree String -> IO (AnchoredDirTree ())
 writeDirectory = writeDirectoryWith writeFile
 
 
 -- | writes the directory structure to disc, then uses the provided function to 
 -- write the contents of Files to disc. 
-writeDirectoryWith :: (FilePath -> a -> IO ()) -> AnchoredDirTree a -> IO ()
-writeDirectoryWith f t = do writeJustDirs t
-                            F.mapM_ (uncurry f) (zipPaths t)
+writeDirectoryWith :: (FilePath -> a -> IO b) -> AnchoredDirTree a -> IO (AnchoredDirTree b)
+writeDirectoryWith f (b:/t) = (b:/) <$> write' b t
+    where write' b' (File n a) = handleDT n $ 
+              (File n) <$> f (b'</>n) a  
+          write' b' (Dir n cs) = handleDT n $  
+              do let bas = b'</>n
+                 createDirectoryIfMissing True bas
+                 Dir n <$> mapM (write' bas) cs
+           -- INTERESTING: have to rebuild Failed constr. to get to typecheck:
+          write' _ (Failed n e) = return $ Failed n e
+
 
 
 
@@ -249,8 +264,7 @@ buildWith' bf' f p =
 
 -- IO function passed to our builder and finally executed here:
 buildAtOnce' :: Builder a
-buildAtOnce' f p = 
-    handle (return . Failed n) $ 
+buildAtOnce' f p = handleDT n $
            do isFile <- doesFileExist p    
               if isFile                         
                  then  File n <$> f p
@@ -261,12 +275,11 @@ buildAtOnce' f p =
 
 -- using unsafePerformIO to get "lazy" traversal:
 buildLazilyUnsafe' :: Builder a
-buildLazilyUnsafe' f p = 
-    handle (return . Failed n) $ 
+buildLazilyUnsafe' f p = handleDT n $ 
            do isFile <- doesFileExist p    
               if isFile                         
                  then  File n <$> f p
-           -- HERE IS THE UNSAFE CODE:
+                  -- HERE IS THE UNSAFE CODE:
                  else Dir n . fmap (rec . combine p) <$> getDirsFiles p
                       
      where rec = unsafePerformIO . buildLazilyUnsafe' f
@@ -352,7 +365,7 @@ flattenDir f          = [f]
 -- path, trie-style, from the root. The filepath will be relative to the current
 -- directory.
 -- This allows us to, for example, mapM_ 'uncurry writeFile' over a DirTree of 
--- strings. 
+-- strings, although `writeDirectory` does a better job of this. 
 zipPaths :: AnchoredDirTree a -> DirTree (FilePath, a)
 zipPaths (b :/ t) = zipP b t
     where zipP p (File n a)   = File n (p</>n , a)
@@ -371,13 +384,10 @@ baseDir = joinPath . init . splitDirectories
 
 
 -- | writes the directory structure (not files) of a DirTree to the anchored 
--- directory. can be preparation for writing files:
-writeJustDirs :: AnchoredDirTree a -> IO ()
-writeJustDirs (b:/t) = write' b t
-    where write' b' (Dir n cs) = do let bas = b' </> n
-                                    createDirectoryIfMissing True bas
-                                    mapM_ (write' bas) cs
-          write' _ _           = return ()
+-- directory. Returns a structure identical to the supplied tree with errors
+-- replaced by `Failed` constructors:
+writeJustDirs :: AnchoredDirTree a -> IO (AnchoredDirTree a)
+writeJustDirs = writeDirectoryWith (const return)
 
 
 ----- the let expression is an annoying hack, because dropFileName "." == ""
@@ -391,7 +401,13 @@ getDirsFiles cs = do let cs' = if null cs then "." else cs
 
 
 
----- OTHERS: ----
+---- FAILURE HELPERS: ----
+
+
+-- handles an IO exception by returning a Failed constructor filled with that 
+-- exception:
+handleDT :: FileName -> IO (DirTree a) -> IO (DirTree a)
+handleDT n = handle (return . Failed n)
 
 
 -- DoesNotExist errors not present at the topmost level could happen if a
@@ -406,10 +422,13 @@ removeNonexistent = filterDir isOkConstructor
            isOkError = not . isDoesNotExistErrorType . ioeGetErrorType . err
 
 
+---- THESE COULD BE USEFUL TO EXPORT:
+
 -- at Dir constructor, apply transformation function to all of directory's
 -- contents, then remove the Nothing's and recurse.
 -- ALWAYS PRESERVES TOPMOST CONSTRUCTOR:
 transform :: (DirTree a -> Maybe (DirTree a)) -> DirTree a -> DirTree a
 transform f (Dir n cs) = Dir n $ map (transform f) $ mapMaybe f cs
 transform _ d = d
+
 

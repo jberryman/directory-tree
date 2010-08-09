@@ -20,7 +20,14 @@ testDir = "/tmp/TESTDIR-LKJHBAE"
 main = do
     -- write our testing directory structure to disk. We include Failed 
     -- constructors which should be discarded:
-    writeDirectory testTree
+    _:/written <- writeDirectory testTree
+    putStrLn "OK"
+
+
+    if (fmap (const ()) (filterDir (not . failed) $free testTree)) == 
+                                  filterDir (not . failed) written
+       then return ()
+       else error "writeDirectory returned a tree that didn't match"
     putStrLn "OK"
 
     -- make file farthest to the right unreadable:
