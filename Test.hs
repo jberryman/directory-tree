@@ -31,14 +31,15 @@ main = do
     putStrLn "OK"
 
     -- make file farthest to the right unreadable:
-    (_:/Dir _ [_,_,Dir "C" [_,_,File "G" p_unreadable]]) <- build testDir
+    (Dir _ [_,_,Dir "C" [_,_,File "G" p_unreadable]]) <- sortDir . free <$> build testDir
     setPermissions p_unreadable (Permissions False True True True)
     putStrLn "OK"
 
 
-    -- read with lazy and standard functions, compare for equality:
+    -- read with lazy and standard functions, compare for equality. Also test that our crazy
+    -- operator works correctly inline with <$>:
     tL <- readDirectoryWithL readFile testDir
-    t@(_:/Dir _ [_,_,Dir "C" [_,_,unreadable_constr]]) <-readDirectory testDir
+    t@(_:/Dir _ [_,_,Dir "C" [unreadable_constr,_,_]]) <- sortDir </$> id <$> readDirectory testDir
     if  t == tL  then return () else error "lazy read  /=  standard read"
     putStrLn "OK"
     
@@ -50,7 +51,7 @@ main = do
     
     
     -- run lazy fold, concating file contents. compare for equality:
-    tL_again <- readDirectoryWithL readFile testDir
+    tL_again <- sortDir </$> readDirectoryWithL readFile testDir
     let tL_concated = F.concat $ free tL_again
     if tL_concated == "abcdef" then return () else error "foldable broke"
     putStrLn "OK"
@@ -59,6 +60,11 @@ main = do
     putStrLn "If you can read this before script exits, lazy Dir IO is borkin"
     mapM_ putStr =<< (map name . contents . free) <$> readDirectoryWithL readFile "/"
     putStrLn "\nOK"
+
+
+    if Dir "d" [File "b" "b",File "a" "a"] == Dir "d" [File "a" undefined, File "b" undefined]
+        then putStrLn "OK"
+        else error "Ord/Eq instance seems messed up"
 
     -- clean up by removing the directory:
     system$ "rm -r " ++ testDir

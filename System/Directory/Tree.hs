@@ -59,10 +59,13 @@ module System.Directory.Tree (
        , failed
        , failures
        , failedMap
-       -- ** Tree Manipulations:
+       -- ** Tree Manipulations
        , flattenDir
+       , sortDir
        , filterDir
        , free                          
+       -- ** Operators
+       , (</$>) 
     ) where
 
 {- 
@@ -93,6 +96,15 @@ CHANGES:
           (passed_DirTree == returned_DirTree) and easily inspect failures in 
           the returned DirTree
         -added functor instance for the AnchoredDirTree type
+
+    0.9.0:
+        -removed `sort` from `getDirsFiles`, move it to the Eq instance 
+        -Eq instance now only compares name, for directories we sort contents
+          (see info re. Ord below) and recursively compare
+        -Ord instance now works like this:
+           1) compare constructor: Failed < Dir < File
+           2) compare `name`
+        -added sortDir function 
 -}
 
 import System.Directory
@@ -119,17 +131,34 @@ import System.IO.Unsafe(unsafePerformIO)
 -- Strings representing a file's contents or anything else you can think of.
 -- We catch any IO errors in the Failed constructor. an Exception can be 
 -- converted to a String with 'show'.
-data DirTree a = Dir { name     :: FileName,
-                       contents :: [DirTree a]  } 
-               | File { name :: FileName,
-                        file :: a }
-               | Failed { name :: FileName,
-                          err  :: IOException }
-                 deriving (Show, Eq)
+data DirTree a = Failed { name :: FileName,        
+                          err  :: IOException     }
+               | Dir    { name     :: FileName,
+                          contents :: [DirTree a] } 
+               | File   { name :: FileName,
+                          file :: a               }
+                 deriving Show
+               
+
+-- | Two DirTrees are equal if they have the same constructor, the same name
+-- (and in the case of `Dir`s) their sorted `contents` are equal:
+instance Eq (DirTree a) where
+    (Failed n _) == (Failed n' _) = n == n'
+    (File n _)   == (File n' _)   = n == n'
+    (Dir n cs)   == (Dir n' cs')  = (n == n') && (sort cs == sort cs')
+    _            == _             = False
 
 
-instance (Ord a)=> Ord (DirTree a) where
-    compare = comparing name
+-- | FIRST: Failed < Dir < File, THEN: compare `on` name
+instance Ord (DirTree a) where
+    compare (Failed _ _) (Dir _ _)    = LT
+    compare (Failed _ _) (File _ _)   = LT
+    compare (Dir _ _)    (Failed _ _) = GT
+    compare (Dir _ _)    (File _ _)   = LT
+    compare (File _ _) (Failed _ _)   = GT
+    compare (File _ _) (Dir _ _)      = GT
+    compare t t'  = comparing name t t'
+
 
 
 -- | a simple wrapper to hold a base directory name, which can be either 
@@ -161,7 +190,8 @@ instance Functor AnchoredDirTree where
     fmap f (b:/d) = b :/ fmap f d
 
 
-
+-- given the same fixity as <$>, is that right?
+infixl 4 </$>
 
    
     ----------------------------
@@ -212,7 +242,7 @@ writeDirectory = writeDirectoryWith writeFile
 writeDirectoryWith :: (FilePath -> a -> IO b) -> AnchoredDirTree a -> IO (AnchoredDirTree b)
 writeDirectoryWith f (b:/t) = (b:/) <$> write' b t
     where write' b' (File n a) = handleDT n $ 
-              (File n) <$> f (b'</>n) a  
+              File n <$> f (b'</>n) a  
           write' b' (Dir n cs) = handleDT n $  
               do let bas = b'</>n
                  createDirectoryIfMissing True bas
@@ -324,7 +354,7 @@ failures = filter failed . flattenDir
 
 -- | maps a function to convert Failed DirTrees to Files or Dirs
 failedMap :: (FileName -> IOException -> DirTree a) -> DirTree a -> DirTree a
-failedMap f = transform (Just . unFail)
+failedMap f = transform unFail
     where unFail (Failed n e) = f n e
           unFail c            = c
                           
@@ -343,7 +373,9 @@ free (_:/t) = t
 -- its children, of course) when the predicate returns False. The topmost 
 -- constructor will always be preserved:
 filterDir :: (DirTree a -> Bool) -> DirTree a -> DirTree a
-filterDir p = transform (\d-> if p d then Just d else Nothing)
+filterDir p = transform filterD
+    where filterD (Dir n cs) = Dir n $ filter p cs
+          filterD c          = c
 
 
 -- | Flattens a `DirTree` into a (never empty) list of tree constructors. `Dir`
@@ -353,8 +385,18 @@ flattenDir (Dir n cs) = Dir n [] : concatMap flattenDir cs
 flattenDir f          = [f]
 
 
+-- | Sort the `contents` of every `Dir` constructor, see Ord instance above:
+sortDir :: DirTree a -> DirTree a
+sortDir = transform sortD
+    where sortD (Dir n cs) = Dir n (sort cs)
+          sortD c          = c
 
 
+-- | Allows for a function on a bare DirTree to be applied to an AnchoredDirTree
+-- within a Functor. Very similar to and useful in combination with `<$>`: 
+(</$>) :: (Functor f) => (DirTree a -> DirTree b) -> f (AnchoredDirTree a) -> 
+                         f (AnchoredDirTree b)
+(</$>) f = fmap (\(b :/ t) -> b :/ f t)
 
 
     ---------------
@@ -402,7 +444,7 @@ writeJustDirs = writeDirectoryWith (const return)
 getDirsFiles :: String -> IO [FilePath]
 getDirsFiles cs = do let cs' = if null cs then "." else cs 
                      dfs <- getDirectoryContents cs'
-                     return $ sort $ dfs \\ [".",".."]
+                     return $ dfs \\ [".",".."]
 
 
 
@@ -427,13 +469,13 @@ removeNonexistent = filterDir isOkConstructor
            isOkError = not . isDoesNotExistErrorType . ioeGetErrorType . err
 
 
----- THESE COULD BE USEFUL TO EXPORT:
+---- THIS COULD BE USEFUL TO EXPORT:
 
 -- at Dir constructor, apply transformation function to all of directory's
 -- contents, then remove the Nothing's and recurse.
 -- ALWAYS PRESERVES TOPMOST CONSTRUCTOR:
-transform :: (DirTree a -> Maybe (DirTree a)) -> DirTree a -> DirTree a
-transform f (Dir n cs) = Dir n $ map (transform f) $ mapMaybe f cs
-transform _ d = d
-
+transform :: (DirTree a -> DirTree a) -> DirTree a -> DirTree a
+transform f t = case f t of
+                     (Dir n cs) -> Dir n $ map (transform f) cs
+                     t'         -> t'
 
