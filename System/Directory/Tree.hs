@@ -73,6 +73,7 @@ TODO:
    NEXT:
     - performance improvements, we want lazy dir functions to run in constant
        space if possible.
+    - v1.0.0 will have a completely stable API, i.e. no added/modified functions
 
    NEXT MAYBE:
     - tree combining functions
