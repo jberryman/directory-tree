@@ -1,5 +1,5 @@
 name:            directory-tree
-version:         0.9.0
+version:         0.9.1
 homepage:        http://coder.bsimmons.name/blog/2009/05/directory-tree-module-released/
 synopsis:        A simple directory-like tree datatype, with useful IO functions 
 description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  

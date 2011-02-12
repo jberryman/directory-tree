@@ -116,7 +116,6 @@ import System.IO.Error(ioeGetErrorType,isDoesNotExistErrorType)
 
 import Data.Ord (comparing)
 import Data.List (sort, (\\))
-import Data.Maybe (mapMaybe)
 
 import Control.Applicative
 import qualified Data.Traversable as T
