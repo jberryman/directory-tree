@@ -55,7 +55,7 @@ description:     A simple directory-like tree datatype, with useful IO functions
 category:        Data, System
 license:         BSD3
 license-file:    LICENSE
-copyright:       (c) 2010, Brandon Simmons <brandon.m.simmons@gmail.com>
+copyright:       (c) 2011, Brandon Simmons <brandon.m.simmons@gmail.com>
 author:          Brandon Simmons
 maintainer:      Brandon Simmons <brandon.m.simmons@gmail.com>
 cabal-version:   >= 1.2.0
