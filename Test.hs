@@ -18,6 +18,8 @@ import System.IO.Error(ioeGetErrorType,isPermissionErrorType)
 testDir = "/tmp/TESTDIR-LKJHBAE"
 
 main = do
+    putStrLn "-- The following tests will either fail with an error "
+    putStrLn "-- message or with an 'undefined' error"
     -- write our testing directory structure to disk. We include Failed 
     -- constructors which should be discarded:
     _:/written <- writeDirectory testTree
@@ -57,14 +59,31 @@ main = do
     putStrLn "OK"
 
      -- get a lazy DirTree at root directory with lazy Directory traversal:
-    putStrLn "If lazy IO is not working, we should be stalled right now."
+    putStrLn "If lazy IO is not working, we should be stalled right now as we try to read in the whole root directory tree."
     mapM_ putStr =<< (map name . contents . free) <$> readDirectoryWithL readFile "/"
     putStrLn "\nOK"
 
 
-    if Dir "d" [File "b" "b",File "a" "a"] == Dir "d" [File "a" "a", File "b" "b"]
+    let undefinedOrdFailed = Failed undefined undefined :: DirTree Char
+        undefinedOrdDir = Dir undefined undefined :: DirTree Char
+        undefinedOrdFile = File undefined undefined :: DirTree Char
+        -- simple equality and sorting
+    if Dir "d" [File "b" "b",File "a" "a"] == Dir "d" [File "a" "a", File "b" "b"] &&
+        -- recursive sort order, enforces non-recursive sorting of Dirs
+       Dir "d" [Dir "b" undefined,File "a" "a"] /= Dir "d" [File "a" "a", Dir "c" undefined] &&
+        -- check ordering of constructors:
+       undefinedOrdFailed < undefinedOrdDir  &&
+       undefinedOrdDir < undefinedOrdFile    &&
+        -- check ordering by dir contents list length:
+       Dir "d" [File "b" "b",File "a" "a"] > Dir "d" [File "a" "a"] &&
+        -- recursive ordering on contents:
+       Dir "d" [File "b" "b", Dir "c" [File "a" "b"]] > Dir "d" [File "b" "b", Dir "c" [File "a" "a"]] 
         then putStrLn "OK"
         else error "Ord/Eq instance is messed up"
+    
+    if Dir "d" [File "b" "b",File "a" "a"] `equalShape` Dir "d" [File "a" undefined, File "b" undefined]
+        then putStrLn "OK"
+        else error "equalShape or comparinghape functions broken"
 
     -- clean up by removing the directory:
     system$ "rm -r " ++ testDir
