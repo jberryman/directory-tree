@@ -59,7 +59,8 @@ main = do
     putStrLn "OK"
 
      -- get a lazy DirTree at root directory with lazy Directory traversal:
-    putStrLn "If lazy IO is not working, we should be stalled right now as we try to read in the whole root directory tree."
+    putStrLn "-- If lazy IO is not working, we should be stalled right now "
+    putStrLn "-- as we try to read in the whole root directory tree."
     mapM_ putStr =<< (map name . contents . free) <$> readDirectoryWithL readFile "/"
     putStrLn "\nOK"
 
