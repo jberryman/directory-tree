@@ -37,6 +37,7 @@ module System.Directory.Tree (
          DirTree (..)
        , AnchoredDirTree (..)
        , FileName
+       
  
        -- * High level IO functions
        , readDirectory
@@ -53,6 +54,9 @@ module System.Directory.Tree (
        , writeJustDirs                 
                                                                         
        -- * Utility functions
+       -- ** Shape comparison and equality
+       , equalShape
+       , comparingShape
        -- ** Handling failure
        , successful
        , anyFailed
@@ -62,6 +66,7 @@ module System.Directory.Tree (
        -- ** Tree Manipulations
        , flattenDir
        , sortDir
+       , sortDirShape
        , filterDir
        , free                          
        -- ** Operators
@@ -106,6 +111,14 @@ CHANGES:
            1) compare constructor: Failed < Dir < File
            2) compare `name`
         -added sortDir function 
+
+    0.10.0
+        -Eq and Ord instances now compare on free "contents" type variable
+        -we provide `equalShape` function for comparison of shape and filenames
+          of arbitrary trees (ignoring free "contents" variable)
+        -provide a comparingShape used in sortDirShape
+        -provide a `sortDirShape` function that sorts a tree, taking into
+          account the free file "contents" data 
 -}
 
 import System.Directory
@@ -115,7 +128,7 @@ import Control.Exception (handle, IOException)
 import System.IO.Error(ioeGetErrorType,isDoesNotExistErrorType)
 
 import Data.Ord (comparing)
-import Data.List (sort, (\\))
+import Data.List (sort, sortBy, (\\))
 
 import Control.Applicative
 import qualified Data.Traversable as T
@@ -142,22 +155,28 @@ data DirTree a = Failed { name :: FileName,
 
 -- | Two DirTrees are equal if they have the same constructor, the same name
 -- (and in the case of `Dir`s) their sorted `contents` are equal:
-instance Eq (DirTree a) where
-    (Failed n _) == (Failed n' _) = n == n'
-    (File n _)   == (File n' _)   = n == n'
-    (Dir n cs)   == (Dir n' cs')  = (n == n') && (sort cs == sort cs')
-    _            == _             = False
+instance (Eq a)=> Eq (DirTree a) where
+    (File n a) == (File n' a') = n == n' && a == a'
+    (Dir n cs) == (Dir n' cs') = 
+        n == n' && sortBy comparingConstr cs == sortBy comparingConstr cs'
+     -- after comparing above we can hand off to shape equality function:
+    d == d' = equalShape d d'
 
 
--- | FIRST: Failed < Dir < File, THEN: compare `on` name
-instance Ord (DirTree a) where
-    compare (Failed _ _) (Dir _ _)    = LT
-    compare (Failed _ _) (File _ _)   = LT
-    compare (Dir _ _)    (Failed _ _) = GT
-    compare (Dir _ _)    (File _ _)   = LT
-    compare (File _ _) (Failed _ _)   = GT
-    compare (File _ _) (Dir _ _)      = GT
-    compare t t'  = comparing name t t'
+-- | First compare constructors: Failed < Dir < File... 
+-- Then compare `name`...
+-- Then compare free variable parameter of `File` constructors
+instance (Ord a,Eq a) => Ord (DirTree a) where
+    compare (File n a) (File n' a') =
+        case compare n n' of
+             EQ -> compare a a'
+             el -> el
+    compare (Dir n cs) (Dir n' cs') = 
+        case compare n n' of
+             EQ -> comparing sort cs cs'
+             el -> el
+     -- after comparing above we can hand off to shape ord function:
+    compare d d' = comparingShape d d'
 
 
 
@@ -329,8 +348,8 @@ buildLazilyUnsafe' f p = handleDT n $
 
 
 
-
 ---- HANDLING FAILURES ----
+
 
 -- | True if any Failed constructors in the tree
 anyFailed :: DirTree a -> Bool
@@ -359,6 +378,60 @@ failedMap f = transform unFail
           unFail c            = c
                           
 
+---- ORDERING AND EQUALITY ----
+
+
+-- | Recursively sort a directory tree according to the Ord instance
+sortDir :: (Ord a)=> DirTree a -> DirTree a
+sortDir = sortDirBy compare
+
+-- | Recursively sort a tree as in `sortDir` but ignore the file contents of a
+-- File constructor
+sortDirShape :: DirTree a -> DirTree a
+sortDirShape = sortDirBy comparingShape  where
+
+  -- HELPER:
+sortDirBy cf = transform sortD
+    where sortD (Dir n cs) = Dir n (sortBy cf cs)
+          sortD c          = c
+
+
+-- | Tests equality of two trees, ignoring their free variable portion. Can be
+-- used to check if any files have been added or deleted, for instance.
+equalShape :: DirTree a -> DirTree b -> Bool
+equalShape d d' = comparingShape d d' == EQ
+
+
+-- | a compare function that ignores the free "file" type variable:
+comparingShape :: DirTree a -> DirTree b -> Ordering
+comparingShape (Dir n cs) (Dir n' cs') = 
+    case compare n n' of
+         EQ -> comp (sortCs cs) (sortCs cs')
+         el -> el
+    where sortCs = sortBy comparingConstr
+           -- stolen from [] Ord instance:
+          comp []     []     = EQ
+          comp []     (_:_)  = LT
+          comp (_:_)  []     = GT
+          comp (x:xs) (y:ys) = case comparingShape x y of
+                                    EQ    -> comp xs ys
+                                    other -> other
+ -- else simply compare the flat constructors, non-recursively:
+comparingShape t t'  = comparingConstr t t'
+
+
+ -- HELPER: a non-recursive comparison
+comparingConstr (Failed _ _) (Dir _ _)    = LT
+comparingConstr (Failed _ _) (File _ _)   = LT
+comparingConstr (File _ _) (Failed _ _)   = GT
+comparingConstr (File _ _) (Dir _ _)      = GT
+comparingConstr (Dir _ _)    (Failed _ _) = GT
+comparingConstr (Dir _ _)    (File _ _)   = LT
+ -- else compare on the names of constructors that are the same, without
+ -- looking at the contents of Dir constructors:
+comparingConstr t t'  = compare (name t) (name t')
+
+
 
 
 ---- OTHER ----
@@ -385,11 +458,7 @@ flattenDir (Dir n cs) = Dir n [] : concatMap flattenDir cs
 flattenDir f          = [f]
 
 
--- | Sort the `contents` of every `Dir` constructor, see Ord instance above:
-sortDir :: DirTree a -> DirTree a
-sortDir = transform sortD
-    where sortD (Dir n cs) = Dir n (sort cs)
-          sortD c          = c
+
 
 
 -- | Allows for a function on a bare DirTree to be applied to an AnchoredDirTree
@@ -402,6 +471,18 @@ sortDir = transform sortD
     ---------------
     --[ HELPERS ]--
     ---------------
+
+
+---- CONSTRUCTOR IDENTIFIERS ----
+
+isFileC :: DirTree a -> Bool
+isFileC (File _ _) = True
+isFileC _ = False
+
+isDirC :: DirTree a -> Bool
+isDirC (Dir _ _) = True
+isDirC _ = False
+
 
 
 ---- PATH CONVERSIONS ----

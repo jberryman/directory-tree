@@ -62,9 +62,9 @@ main = do
     putStrLn "\nOK"
 
 
-    if Dir "d" [File "b" "b",File "a" "a"] == Dir "d" [File "a" undefined, File "b" undefined]
+    if Dir "d" [File "b" "b",File "a" "a"] == Dir "d" [File "a" "a", File "b" "b"]
         then putStrLn "OK"
-        else error "Ord/Eq instance seems messed up"
+        else error "Ord/Eq instance is messed up"
 
     -- clean up by removing the directory:
     system$ "rm -r " ++ testDir
