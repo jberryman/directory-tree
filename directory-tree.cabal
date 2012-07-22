@@ -1,5 +1,5 @@
 name:            directory-tree
-version:         0.10.0
+version:         0.10.1
 homepage:        http://coder.bsimmons.name/blog/2009/05/directory-tree-module-released/
 synopsis:        A simple directory-like tree datatype, with useful IO functions 
 description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  
@@ -58,11 +58,14 @@ license-file:    LICENSE
 copyright:       (c) 2011, Brandon Simmons <brandon.m.simmons@gmail.com>
 author:          Brandon Simmons
 maintainer:      Brandon Simmons <brandon.m.simmons@gmail.com>
-cabal-version:   >= 1.2.0
+cabal-version:   >= 1.6
 build-type:      Simple
 tested-with:     GHC <=6.12.1
 extra-source-files: EXAMPLES/Examples.hs, EXAMPLES/LazyExamples.hs
 
+source-repository head   
+    type:     git
+    location: https://github.com/jberryman/directory-tree.git
 
 library
     exposed-modules: System.Directory.Tree
