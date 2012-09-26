@@ -353,7 +353,7 @@ buildLazilyUnsafe' f p = handleDT n $
                  then  File n <$> f p
                   -- HERE IS THE UNSAFE CODE:
                  else Dir n . fmap (rec . combine p) <$> getDirsFiles p
-                      
+     -- TODO: this should really be unsafeInterleaveIO
      where rec = unsafePerformIO . buildLazilyUnsafe' f
            n = topDir p
 
