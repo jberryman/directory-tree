@@ -409,6 +409,7 @@ sortDirShape :: DirTree a -> DirTree a
 sortDirShape = sortDirBy comparingShape  where
 
   -- HELPER:
+sortDirBy :: (DirTree a -> DirTree a -> Ordering) -> DirTree a -> DirTree a
 sortDirBy cf = transform sortD
     where sortD (Dir n cs) = Dir n (sortBy cf cs)
           sortD c          = c
@@ -440,6 +441,7 @@ comparingShape t t'  = comparingConstr t t'
 
 
  -- HELPER: a non-recursive comparison
+comparingConstr :: DirTree a -> DirTree a1 -> Ordering
 comparingConstr (Failed _ _) (Dir _ _)    = LT
 comparingConstr (Failed _ _) (File _ _)   = LT
 comparingConstr (File _ _) (Failed _ _)   = GT
@@ -464,11 +466,12 @@ free = dirTree
 -- then return that subtree, appending the 'name' of the old root 'Dir' to the
 -- 'anchor' of the AnchoredDirTree wrapper. Otherwise return @Nothing@.
 dropTo :: FileName -> AnchoredDirTree a -> Maybe (AnchoredDirTree a)
-dropTo n' (p :/ Dir n ds) = search ds
+dropTo n' (p :/ Dir n ds') = search ds'
     where search [] = Nothing
           search (d:ds) | equalFilePath n' (name d) = Just ((p</>n) :/ d)
                         | otherwise = search ds
 dropTo _ _ = Nothing
+
 
 -- | applies the predicate to each constructor in the tree, removing it (and
 -- its children, of course) when the predicate returns False. The topmost 
@@ -502,7 +505,7 @@ flattenDir f          = [f]
 
 
 ---- CONSTRUCTOR IDENTIFIERS ----
-
+{-
 isFileC :: DirTree a -> Bool
 isFileC (File _ _) = True
 isFileC _ = False
@@ -510,7 +513,7 @@ isFileC _ = False
 isDirC :: DirTree a -> Bool
 isDirC (Dir _ _) = True
 isDirC _ = False
-
+-}
 
 
 ---- PATH CONVERSIONS ----
