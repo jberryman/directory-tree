@@ -26,15 +26,18 @@ main = do
     putStrLn "OK"
 
 
-    if (fmap (const ()) (filterDir (not . failed) $free testTree)) == 
+    if (fmap (const ()) (filterDir (not . failed) $dirTree testTree)) == 
                                   filterDir (not . failed) written
        then return ()
        else error "writeDirectory returned a tree that didn't match"
     putStrLn "OK"
 
     -- make file farthest to the right unreadable:
-    (Dir _ [_,_,Dir "C" [_,_,File "G" p_unreadable]]) <- sortDir . free <$> build testDir
-    setPermissions p_unreadable (Permissions False True True True)
+    (Dir _ [_,_,Dir "C" [_,_,File "G" p_unreadable]]) <- sortDir . dirTree <$> build testDir
+    setPermissions p_unreadable emptyPermissions{readable   = False,
+                                                   writable   = True,
+                                                   executable = True,
+                                                   searchable = True}
     putStrLn "OK"
 
 
@@ -54,14 +57,15 @@ main = do
     
     -- run lazy fold, concating file contents. compare for equality:
     tL_again <- sortDir </$> readDirectoryWithL readFile testDir
-    let tL_concated = F.concat $ free tL_again
+    let tL_concated = F.concat $ dirTree tL_again
     if tL_concated == "abcdef" then return () else error "foldable broke"
     putStrLn "OK"
 
      -- get a lazy DirTree at root directory with lazy Directory traversal:
     putStrLn "-- If lazy IO is not working, we should be stalled right now "
     putStrLn "-- as we try to read in the whole root directory tree."
-    mapM_ putStr =<< (map name . contents . free) <$> readDirectoryWithL readFile "/"
+    putStrLn "-- Go ahead and press CTRL-C if you've read this far"
+    mapM_ putStr =<< (map name . contents . dirTree) <$> readDirectoryWithL readFile "/"
     putStrLn "\nOK"
 
 
