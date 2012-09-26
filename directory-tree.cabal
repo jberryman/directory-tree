@@ -1,6 +1,6 @@
 name:            directory-tree
-version:         0.10.1
-homepage:        http://coder.bsimmons.name/blog/2009/05/directory-tree-module-released/
+version:         0.11.0
+homepage:        http://brandon.si/code/directory-tree-module-released/
 synopsis:        A simple directory-like tree datatype, with useful IO functions 
 description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  
  .
@@ -51,6 +51,16 @@ description:     A simple directory-like tree datatype, with useful IO functions
  . 
  Any ideas or suggestions for improvements are most welcome :-)
  .
+ /CHANGES/: from 0.10.1
+ .
+ - added records for AnchoredDirTree: 'anchor', 'dirTree'
+ .
+ - 'free' deprecated in favor of 'dirTree' 
+ .
+ - added a new function 'dropTo'
+ .
+ - implemented lenses compatible with "lens" package
+ .
  
 category:        Data, System
 license:         BSD3
@@ -60,7 +70,7 @@ author:          Brandon Simmons
 maintainer:      Brandon Simmons <brandon.m.simmons@gmail.com>
 cabal-version:   >= 1.6
 build-type:      Simple
-tested-with:     GHC <=6.12.1
+tested-with:     GHC <=7.4.1
 extra-source-files: EXAMPLES/Examples.hs, EXAMPLES/LazyExamples.hs
 
 source-repository head   

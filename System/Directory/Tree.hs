@@ -47,11 +47,13 @@ module System.Directory.Tree (
        , writeDirectoryWith                            
                                                                         
        -- * Lower level functions
-       , zipPaths
        , build
        , buildL
        , openDirectory
        , writeJustDirs                 
+       -- ** Manipulating FilePaths
+       , zipPaths
+       , free                          
                                                                         
        -- * Utility functions
        -- ** Shape comparison and equality
@@ -68,9 +70,15 @@ module System.Directory.Tree (
        , sortDir
        , sortDirShape
        , filterDir
-       , free                          
+       -- ** Navigation
+       , dropTo
        -- ** Operators
        , (</$>) 
+
+       -- * Lenses
+       {- | These are compatible with the "lens" library 
+       -}
+       , 
     ) where
 
 {- 
@@ -81,6 +89,7 @@ TODO:
     - v1.0.0 will have a completely stable API, i.e. no added/modified functions
 
    NEXT MAYBE:
+    - include lenses implemented for tree, compatible with "lens"
     - tree combining functions
     - tree searching based on file names
     - look into comonad abstraction
@@ -119,6 +128,13 @@ CHANGES:
         -provide a comparingShape used in sortDirShape
         -provide a `sortDirShape` function that sorts a tree, taking into
           account the free file "contents" data 
+
+    0.11.0
+        - added records for AnchoredDirTree: 'anchor', 'dirTree'
+        - 'free' deprecated in favor of 'dirTree' 
+        - added a new function 'dropTo'
+        - implemented lenses compatible with "lens" package, maybe even allowing 
+            zipper usage!
 -}
 
 import System.Directory
@@ -180,11 +196,11 @@ instance (Ord a,Eq a) => Ord (DirTree a) where
 
 
 
--- | a simple wrapper to hold a base directory name, which can be either 
--- an absolute or relative path. This lets us give the DirTree a context,
--- while still letting us store only directory and file NAMES (not full paths)
--- in the DirTree. (uses an infix constructor; don't be scared)
-data AnchoredDirTree a = FilePath :/ DirTree a
+-- | a simple wrapper to hold a base directory name, which can be either an
+-- absolute or relative path. This lets us give the DirTree a context, while
+-- still letting us store only directory and file /names/ (not full paths) in
+-- the DirTree. (uses an infix constructor; don't be scared)
+data AnchoredDirTree a = (:/) { anchor :: FilePath, dirTree :: DirTree a }
                      deriving (Show, Ord, Eq)
 
 -- | an element in a FilePath:
@@ -291,7 +307,7 @@ openDirectory p m = readDirectoryWith (flip openFile m) p
 -- paths to the files they are abstracting.
 build :: FilePath -> IO (AnchoredDirTree FilePath)
 build = buildWith' buildAtOnce' return   -- we say 'return' here to get 
-                             -- back a  tree  of  FilePaths
+                                         -- back a  tree  of  FilePaths
 
 
 -- | identical to `build` but does directory reading IO lazily as needed:
@@ -401,6 +417,7 @@ sortDirBy cf = transform sortD
 equalShape :: DirTree a -> DirTree b -> Bool
 equalShape d d' = comparingShape d d' == EQ
 
+-- TODO: we should use equalFilePath here, but how to sort properly? with System.Directory.canonicalizePath, before compare?
 
 -- | a compare function that ignores the free "file" type variable:
 comparingShape :: DirTree a -> DirTree b -> Ordering
@@ -436,11 +453,20 @@ comparingConstr t t'  = compare (name t) (name t')
 
 ---- OTHER ----
 
-
--- | strips away base directory wrapper:
+{-# DEPRECATED free "Use record 'dirTree'" #-}
+-- | DEPRECATED. Use record 'dirTree' instead.
 free :: AnchoredDirTree a -> DirTree a
-free (_:/t) = t
+free = dirTree
 
+-- | If the argument is a 'Dir' containing a sub-DirTree matching 'FileName'
+-- then return that subtree, appending the 'name' of the old root 'Dir' to the
+-- 'anchor' of the AnchoredDirTree wrapper. Otherwise return @Nothing@.
+dropTo :: FileName -> AnchoredDirTree a -> Maybe (AnchoredDirTree a)
+dropTo n' (p :/ Dir n ds) = search ds
+    where search [] = Nothing
+          search (d:ds) | equalFilePath n' (name d) = Just ((p</>n) :/ d)
+                        | otherwise = search ds
+dropTo _ _ = Nothing
 
 -- | applies the predicate to each constructor in the tree, removing it (and
 -- its children, of course) when the predicate returns False. The topmost 
@@ -489,11 +515,12 @@ isDirC _ = False
 
 
 
--- | tuple up the complete filename with the File contents, by building up the 
--- path, trie-style, from the root. The filepath will be relative to the current
+-- | tuple up the complete file path with the 'file' contents, by building up the 
+-- path, trie-style, from the root. The filepath will be relative to \"anchored\"
 -- directory.
--- This allows us to, for example, mapM_ 'uncurry writeFile' over a DirTree of 
--- strings, although `writeDirectory` does a better job of this. 
+--
+-- This allows us to, for example, @mapM_ uncurry writeFile@ over a DirTree of 
+-- strings, although 'writeDirectory' does a better job of this. 
 zipPaths :: AnchoredDirTree a -> DirTree (FilePath, a)
 zipPaths (b :/ t) = zipP b t
     where zipP p (File n a)   = File n (p</>n , a)
