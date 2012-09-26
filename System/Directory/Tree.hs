@@ -1,4 +1,3 @@
-
 --------------------------------------------------------------------
 -- |
 -- Module    : System.Directory.Tree
@@ -78,8 +77,12 @@ module System.Directory.Tree (
        -- * Lenses
        {- | These are compatible with the "lens" library 
        -}
-       , 
+       , _contents, _err, _file, _name
+       , _anchor, _dirTree
     ) where
+
+
+
 
 {- 
 TODO:
@@ -89,9 +92,8 @@ TODO:
     - v1.0.0 will have a completely stable API, i.e. no added/modified functions
 
    NEXT MAYBE:
-    - include lenses implemented for tree, compatible with "lens"
     - tree combining functions
-    - tree searching based on file names
+    - more tree searching based on file names
     - look into comonad abstraction
 
     THE FUTURE!:
@@ -154,7 +156,6 @@ import qualified Data.Foldable as F
 import System.IO.Unsafe(unsafePerformIO)   
 
 
-
 -- | the String in the name field is always a file name, never a full path.
 -- The free type variable is used in the File constructor and can hold Handles,
 -- Strings representing a file's contents or anything else you can think of.
@@ -202,6 +203,7 @@ instance (Ord a,Eq a) => Ord (DirTree a) where
 -- the DirTree. (uses an infix constructor; don't be scared)
 data AnchoredDirTree a = (:/) { anchor :: FilePath, dirTree :: DirTree a }
                      deriving (Show, Ord, Eq)
+
 
 -- | an element in a FilePath:
 type FileName = String
@@ -587,3 +589,69 @@ transform f t = case f t of
                      (Dir n cs) -> Dir n $ map (transform f) cs
                      t'         -> t'
 
+-- Lenses, generated with TH from "lens" -----------
+_contents :: 
+            Applicative f =>
+            ([DirTree a] -> f [DirTree a]) -> DirTree a -> f (DirTree a)
+
+_err :: 
+       Applicative f =>
+       (IOException -> f IOException) -> DirTree a -> f (DirTree a)
+
+_file :: 
+        Applicative f =>
+        (a -> f a) -> DirTree a -> f (DirTree a)
+
+_name :: 
+        Functor f =>
+        (FileName -> f FileName) -> DirTree a -> f (DirTree a)
+
+_anchor :: 
+          Functor f =>
+          (FilePath -> f FilePath)
+          -> AnchoredDirTree a -> f (AnchoredDirTree a)
+
+_dirTree :: 
+           Functor f =>
+           (DirTree t -> f (DirTree a))
+           -> AnchoredDirTree t -> f (AnchoredDirTree a)
+
+--makeLensesFor [("name","_name"),("err","_err"),("contents","_contents"),("file","_file")] ''DirTree
+_contents _f_a6s2 (Failed _name_a6s3 _err_a6s4)
+  = pure (Failed _name_a6s3 _err_a6s4)
+_contents _f_a6s5 (Dir _name_a6s6 _contents'_a6s7)
+  = ((\ _contents_a6s8 -> Dir _name_a6s6 _contents_a6s8)
+     <$> (_f_a6s5 _contents'_a6s7))
+_contents _f_a6s9 (File _name_a6sa _file_a6sb)
+  = pure (File _name_a6sa _file_a6sb)
+_err _f_a6sd (Failed _name_a6se _err'_a6sf)
+  = ((\ _err_a6sg -> Failed _name_a6se _err_a6sg)
+     <$> (_f_a6sd _err'_a6sf))
+_err _f_a6sh (Dir _name_a6si _contents_a6sj)
+  = pure (Dir _name_a6si _contents_a6sj)
+_err _f_a6sk (File _name_a6sl _file_a6sm)
+  = pure (File _name_a6sl _file_a6sm)
+_file _f_a6so (Failed _name_a6sp _err_a6sq)
+  = pure (Failed _name_a6sp _err_a6sq)
+_file _f_a6sr (Dir _name_a6ss _contents_a6st)
+  = pure (Dir _name_a6ss _contents_a6st)
+_file _f_a6su (File _name_a6sv _file'_a6sw)
+  = ((\ _file_a6sx -> File _name_a6sv _file_a6sx)
+     <$> (_f_a6su _file'_a6sw))
+_name _f_a6sz (Failed _name'_a6sA _err_a6sC)
+  = ((\ _name_a6sB -> Failed _name_a6sB _err_a6sC)
+     <$> (_f_a6sz _name'_a6sA))
+_name _f_a6sD (Dir _name'_a6sE _contents_a6sG)
+  = ((\ _name_a6sF -> Dir _name_a6sF _contents_a6sG)
+     <$> (_f_a6sD _name'_a6sE))
+_name _f_a6sH (File _name'_a6sI _file_a6sK)
+  = ((\ _name_a6sJ -> File _name_a6sJ _file_a6sK)
+     <$> (_f_a6sH _name'_a6sI))
+
+--makeLensesFor [("anchor","_anchor"),("dirTree","_dirTree")] ''AnchoredDirTree
+_anchor _f_a7wT (_anchor'_a7wU :/ _dirTree_a7wW)
+  = ((\ _anchor_a7wV -> (:/) _anchor_a7wV _dirTree_a7wW)
+     <$> (_f_a7wT _anchor'_a7wU))
+_dirTree _f_a7wZ (_anchor_a7x0 :/ _dirTree'_a7x1)
+  = ((\ _dirTree_a7x2 -> (:/) _anchor_a7x0 _dirTree_a7x2)
+     <$> (_f_a7wZ _dirTree'_a7x1))
