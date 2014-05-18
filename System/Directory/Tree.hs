@@ -248,9 +248,7 @@ readDirectory = readDirectoryWith readFile
 -- | same as readDirectory but allows us to, for example, use 
 -- ByteString.readFile to return a tree of ByteStrings.
 readDirectoryWith :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
-readDirectoryWith f p = do (b:/t) <- buildWith' buildAtOnce' f p
-                           let t' = removeNonexistent t
-                           return ( b:/t') 
+readDirectoryWith f p = buildWith' buildAtOnce' f p
 
 
 -- | A "lazy" version of `readDirectoryWith` that does IO operations as needed
@@ -258,9 +256,7 @@ readDirectoryWith f p = do (b:/t) <- buildWith' buildAtOnce' f p
 -- /NOTE:/ This function uses unsafePerformIO under the hood. I believe our use
 -- here is safe, but this function is experimental in this release:
 readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
-readDirectoryWithL f p = do (b:/t) <- buildWith' buildLazilyUnsafe' f p
-                            let t' = removeNonexistent t
-                            return ( b:/t') 
+readDirectoryWithL f p = buildWith' buildLazilyUnsafe' f p
 
 
 -- | write a DirTree of strings to disk. Clobbers files of the same name. 
