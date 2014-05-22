@@ -282,7 +282,6 @@ writeDirectoryWith f (b:/t) = (b:/) <$> write' b t
               do let bas = b'</>n
                  createDirectoryIfMissing True bas
                  Dir n <$> mapM (write' bas) cs
-           -- INTERESTING: have to rebuild Failed constr. to get to typecheck:
           write' _ (Failed n e) = return $ Failed n e
 
 
@@ -589,6 +588,8 @@ transformDir f t = case f t of
                      t'         -> t'
 
 -- Lenses, generated with TH from "lens" -----------
+-- TODO deprecate these? Pain in the ass to generate, and maybe it's intended
+--      for users to generate their own lenses.
 _contents :: 
             Applicative f =>
             ([DirTree a] -> f [DirTree a]) -> DirTree a -> f (DirTree a)
