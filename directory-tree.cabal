@@ -51,15 +51,11 @@ description:     A simple directory-like tree datatype, with useful IO functions
  . 
  Any ideas or suggestions for improvements are most welcome :-)
  .
- /CHANGES/: from 0.10.1
+ /CHANGES/: from 0.11
  .
  - added records for AnchoredDirTree: 'anchor', 'dirTree'
  .
- - 'free' deprecated in favor of 'dirTree' 
- .
- - added a new function 'dropTo'
- .
- - implemented lenses compatible with "lens" package
+ - export 'transform' function
  .
  
 category:        Data, System

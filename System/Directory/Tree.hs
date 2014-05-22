@@ -69,6 +69,8 @@ module System.Directory.Tree (
        , sortDir
        , sortDirShape
        , filterDir
+       -- *** Low-level
+       , transform
        -- ** Navigation
        , dropTo
        -- ** Operators
@@ -582,11 +584,9 @@ removeNonexistent = filterDir isOkConstructor
            isOkError = not . isDoesNotExistErrorType . ioeGetErrorType . err
 
 
----- THIS COULD BE USEFUL TO EXPORT:
-
--- at Dir constructor, apply transformation function to all of directory's
--- contents, then remove the Nothing's and recurse.
--- ALWAYS PRESERVES TOPMOST CONSTRUCTOR:
+-- | At 'Dir' constructor, apply transformation function to all of directory's
+-- contents, then remove the Nothing's and recurse. This always preserves the
+-- topomst constructor.
 transform :: (DirTree a -> DirTree a) -> DirTree a -> DirTree a
 transform f t = case f t of
                      (Dir n cs) -> Dir n $ map (transform f) cs
