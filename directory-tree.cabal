@@ -1,5 +1,5 @@
 name:            directory-tree
-version:         0.11.0
+version:         0.12.0
 homepage:        http://brandon.si/code/directory-tree-module-released/
 synopsis:        A simple directory-like tree datatype, with useful IO functions 
 description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  
@@ -53,9 +53,9 @@ description:     A simple directory-like tree datatype, with useful IO functions
  .
  /CHANGES/: from 0.11
  .
- - added records for AnchoredDirTree: 'anchor', 'dirTree'
+ - export 'System.Directory.Tree.transformDir' as requested
  .
- - export 'transform' function
+ - add test suite to cabal file
  .
  
 category:        Data, System
@@ -64,9 +64,9 @@ license-file:    LICENSE
 copyright:       (c) 2011, Brandon Simmons <brandon.m.simmons@gmail.com>
 author:          Brandon Simmons
 maintainer:      Brandon Simmons <brandon.m.simmons@gmail.com>
-cabal-version:   >= 1.6
+cabal-version:   >= 1.8
 build-type:      Simple
-tested-with:     GHC <=7.4.1
+tested-with:     GHC <=7.8.2
 extra-source-files: EXAMPLES/Examples.hs, EXAMPLES/LazyExamples.hs
 
 source-repository head   
@@ -77,3 +77,11 @@ library
     exposed-modules: System.Directory.Tree
     build-depends: base <5, filepath <2, directory <2
     ghc-options:       -Wall
+
+test-suite test
+    main-is: Test.hs
+    type: exitcode-stdio-1.0
+    build-depends: base <5, filepath <2, directory <2
+                 , process
+    ghc-options:       -Wall
+
