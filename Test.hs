@@ -5,18 +5,19 @@ module Main
 
 import System.Directory.Tree
 import Control.Applicative
-import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 import System.Directory
-import System.IO
-import System.Cmd
+import System.Process
 import System.IO.Error(ioeGetErrorType,isPermissionErrorType)
+import Control.Monad(void)
 
 
 
 
+testDir :: FilePath
 testDir = "/tmp/TESTDIR-LKJHBAE"
 
+main :: IO ()
 main = do
     putStrLn "-- The following tests will either fail with an error "
     putStrLn "-- message or with an 'undefined' error"
@@ -91,7 +92,7 @@ main = do
         else error "equalShape or comparinghape functions broken"
 
     -- clean up by removing the directory:
-    system$ "rm -r " ++ testDir
+    void $ system $ "rm -r " ++ testDir
     putStrLn "SUCCESS"
     
 
