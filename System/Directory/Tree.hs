@@ -70,7 +70,7 @@ module System.Directory.Tree (
        , sortDirShape
        , filterDir
        -- *** Low-level
-       , transform
+       , transformDir
        -- ** Navigation
        , dropTo
        -- ** Operators
@@ -393,7 +393,7 @@ failures = filter failed . flattenDir
 
 -- | maps a function to convert Failed DirTrees to Files or Dirs
 failedMap :: (FileName -> IOException -> DirTree a) -> DirTree a -> DirTree a
-failedMap f = transform unFail
+failedMap f = transformDir unFail
     where unFail (Failed n e) = f n e
           unFail c            = c
                           
@@ -412,7 +412,7 @@ sortDirShape = sortDirBy comparingShape  where
 
   -- HELPER:
 sortDirBy :: (DirTree a -> DirTree a -> Ordering) -> DirTree a -> DirTree a
-sortDirBy cf = transform sortD
+sortDirBy cf = transformDir sortD
     where sortD (Dir n cs) = Dir n (sortBy cf cs)
           sortD c          = c
 
@@ -479,7 +479,7 @@ dropTo _ _ = Nothing
 -- its children, of course) when the predicate returns False. The topmost 
 -- constructor will always be preserved:
 filterDir :: (DirTree a -> Bool) -> DirTree a -> DirTree a
-filterDir p = transform filterD
+filterDir p = transformDir filterD
     where filterD (Dir n cs) = Dir n $ filter p cs
           filterD c          = c
 
@@ -587,9 +587,9 @@ removeNonexistent = filterDir isOkConstructor
 -- | At 'Dir' constructor, apply transformation function to all of directory's
 -- contents, then remove the Nothing's and recurse. This always preserves the
 -- topomst constructor.
-transform :: (DirTree a -> DirTree a) -> DirTree a -> DirTree a
-transform f t = case f t of
-                     (Dir n cs) -> Dir n $ map (transform f) cs
+transformDir :: (DirTree a -> DirTree a) -> DirTree a -> DirTree a
+transformDir f t = case f t of
+                     (Dir n cs) -> Dir n $ map (transformDir f) cs
                      t'         -> t'
 
 -- Lenses, generated with TH from "lens" -----------
