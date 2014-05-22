@@ -57,6 +57,8 @@ description:     A simple directory-like tree datatype, with useful IO functions
  .
  - add test suite to cabal file
  .
+ - remove redundant @removeNonexistent@ (thanks to dmwit for patch)
+ .
  
 category:        Data, System
 license:         BSD3
