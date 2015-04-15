@@ -238,21 +238,25 @@ infixl 4 </$>
     ----------------------------
 
 
--- | build an AnchoredDirTree, given the path to a directory, opening the files
+-- | Build an AnchoredDirTree, given the path to a directory, opening the files
 -- using readFile. 
--- Uses `readDirectoryWith readFile` internally and has the effect of traversing the
+-- Uses @readDirectoryWith readFile@ internally and has the effect of traversing the
 -- entire directory structure. See `readDirectoryWithL` for lazy production
 -- of a DirTree structure.
 readDirectory :: FilePath -> IO (AnchoredDirTree String)
 readDirectory = readDirectoryWith readFile
 
 
--- | build a `DirTree` rooted at @p@ and using @f@ to fill the `file` field of `File` nodes.
+-- | Build a 'DirTree' rooted at @p@ and using @f@ to fill the 'file' field of 'File' nodes.
 --
--- The `FilePath` arguments to @f@ will be the full path to current file, and
+-- The 'FilePath' arguments to @f@ will be the full path to the current file, and
 -- will include the root @p@ as a prefix.
--- For example, you could use `return` for @f@ to return a tree of full file
--- paths, although the `build` function below already does this.
+-- For example, the following would return a tree of full 'FilePath's
+-- like \"..\/tmp\/foo\" and \"..\/tmp\/bar\/baz\":
+--
+-- > readDirectoryWith return "../tmp"
+--
+-- Note though that the 'build' function below already does this.
 readDirectoryWith :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWith f p = buildWith' buildAtOnce' f p
 
