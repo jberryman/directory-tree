@@ -8,7 +8,7 @@
 -- Stability :  experimental
 -- Portability: portable
 --
---   Provides a simple data structure mirroring a directory tree on the 
+-- Provides a simple data structure mirroring a directory tree on the 
 -- filesystem, as well as useful functions for reading and writing file
 -- and directory structures in the IO monad. 
 -- 
@@ -238,17 +238,25 @@ infixl 4 </$>
     ----------------------------
 
 
--- | build an AnchoredDirTree, given the path to a directory, opening the files
+-- | Build an AnchoredDirTree, given the path to a directory, opening the files
 -- using readFile. 
--- Uses `readDirectoryWith` internally and has the effect of traversing the
+-- Uses @readDirectoryWith readFile@ internally and has the effect of traversing the
 -- entire directory structure. See `readDirectoryWithL` for lazy production
 -- of a DirTree structure.
 readDirectory :: FilePath -> IO (AnchoredDirTree String)
 readDirectory = readDirectoryWith readFile
 
 
--- | same as readDirectory but allows us to, for example, use 
--- ByteString.readFile to return a tree of ByteStrings.
+-- | Build a 'DirTree' rooted at @p@ and using @f@ to fill the 'file' field of 'File' nodes.
+--
+-- The 'FilePath' arguments to @f@ will be the full path to the current file, and
+-- will include the root @p@ as a prefix.
+-- For example, the following would return a tree of full 'FilePath's
+-- like \"..\/tmp\/foo\" and \"..\/tmp\/bar\/baz\":
+--
+-- > readDirectoryWith return "../tmp"
+--
+-- Note though that the 'build' function below already does this.
 readDirectoryWith :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWith f p = buildWith' buildAtOnce' f p
 
@@ -323,7 +331,7 @@ type UserIO a = FilePath -> IO a
 type Builder a = UserIO a -> FilePath -> IO (DirTree a)
 
 -- remove non-existent file errors, which are artifacts of the "non-atomic" 
--- nature of traversing a system firectory tree:
+-- nature of traversing a system directory tree:
 buildWith' :: Builder a -> UserIO a -> FilePath -> IO (AnchoredDirTree a)
 buildWith' bf' f p = 
     do tree <- bf' f p
