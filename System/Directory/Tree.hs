@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 --------------------------------------------------------------------
 -- |
 -- Module    : System.Directory.Tree
@@ -150,13 +151,15 @@ import System.IO.Error(ioeGetErrorType,isDoesNotExistErrorType)
 import Data.Ord (comparing)
 import Data.List (sort, sortBy, (\\))
 
-import Control.Applicative
 import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 
  -- exported functions affected: `buildL`, `readDirectoryWithL`
 import System.IO.Unsafe(unsafePerformIO)
 
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative
+#endif
 
 -- | the String in the name field is always a file name, never a full path.
 -- The free type variable is used in the File constructor and can hold Handles,
