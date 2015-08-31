@@ -8,52 +8,52 @@
 -- Stability :  experimental
 -- Portability: portable
 --
--- Provides a simple data structure mirroring a directory tree on the 
+-- Provides a simple data structure mirroring a directory tree on the
 -- filesystem, as well as useful functions for reading and writing file
--- and directory structures in the IO monad. 
--- 
+-- and directory structures in the IO monad.
+--
 -- Errors are caught in a special constructor in the DirTree type.
--- 
+--
 --   Defined instances of Functor, Traversable and Foldable allow for
 -- easily operating on a directory of files. For example, you could use
 -- Foldable.foldr to create a hash of the entire contents of a directory.
 --
---   The functions `readDirectoryWithL` and `buildL` allow for doing 
+--   The functions `readDirectoryWithL` and `buildL` allow for doing
 -- directory-traversing IO lazily as required by the execution of pure
 -- code. This allows you to treat large directories the same way as you
 -- would a lazy infinite list.
--- 
---   The AnchoredDirTree type is a simple wrapper for DirTree to keep  
--- track of a base directory context for the DirTree. 
+--
+--   The AnchoredDirTree type is a simple wrapper for DirTree to keep
+-- track of a base directory context for the DirTree.
 --
 -- Please send me any requests, bugs, or other feedback on this module!
 --
 --------------------------------------------------------------------
 
 module System.Directory.Tree (
-         
+
        -- * Data types for representing directory trees
          DirTree (..)
        , AnchoredDirTree (..)
        , FileName
-       
- 
+
+
        -- * High level IO functions
        , readDirectory
        , readDirectoryWith
        , readDirectoryWithL
        , writeDirectory
-       , writeDirectoryWith                            
-                                                                        
+       , writeDirectoryWith
+
        -- * Lower level functions
        , build
        , buildL
        , openDirectory
-       , writeJustDirs                 
+       , writeJustDirs
        -- ** Manipulating FilePaths
        , zipPaths
-       , free                          
-                                                                        
+       , free
+
        -- * Utility functions
        -- ** Shape comparison and equality
        , equalShape
@@ -74,10 +74,10 @@ module System.Directory.Tree (
        -- ** Navigation
        , dropTo
        -- ** Operators
-       , (</$>) 
+       , (</$>)
 
        -- * Lenses
-       {- | These are compatible with the "lens" library 
+       {- | These are compatible with the "lens" library
        -}
        , _contents, _err, _file, _name
        , _anchor, _dirTree
@@ -86,7 +86,7 @@ module System.Directory.Tree (
 
 
 
-{- 
+{-
 TODO:
    NEXT:
     - performance improvements, we want lazy dir functions to run in constant
@@ -105,25 +105,25 @@ TODO:
 {-
 CHANGES:
     0.3.0
-        -remove does not exist errors from DirTrees returned by `read*` 
+        -remove does not exist errors from DirTrees returned by `read*`
           functions
         -add lazy `readDirectoryWithL` function which uses unsafePerformIO
           internally (and safely, we hope) to do DirTree-producing IO as
           needed by consuming function
         -writeDirectory now returns a DirTree to reflect what was written
           successfully to Disk. This lets us inspect for write failures with
-          (passed_DirTree == returned_DirTree) and easily inspect failures in 
+          (passed_DirTree == returned_DirTree) and easily inspect failures in
           the returned DirTree
         -added functor instance for the AnchoredDirTree type
 
     0.9.0:
-        -removed `sort` from `getDirsFiles`, move it to the Eq instance 
+        -removed `sort` from `getDirsFiles`, move it to the Eq instance
         -Eq instance now only compares name, for directories we sort contents
           (see info re. Ord below) and recursively compare
         -Ord instance now works like this:
            1) compare constructor: Failed < Dir < File
            2) compare `name`
-        -added sortDir function 
+        -added sortDir function
 
     0.10.0
         -Eq and Ord instances now compare on free "contents" type variable
@@ -131,13 +131,13 @@ CHANGES:
           of arbitrary trees (ignoring free "contents" variable)
         -provide a comparingShape used in sortDirShape
         -provide a `sortDirShape` function that sorts a tree, taking into
-          account the free file "contents" data 
+          account the free file "contents" data
 
     0.11.0
         - added records for AnchoredDirTree: 'anchor', 'dirTree'
-        - 'free' deprecated in favor of 'dirTree' 
+        - 'free' deprecated in favor of 'dirTree'
         - added a new function 'dropTo'
-        - implemented lenses compatible with "lens" package, maybe even allowing 
+        - implemented lenses compatible with "lens" package, maybe even allowing
             zipper usage!
 -}
 
@@ -155,34 +155,34 @@ import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 
  -- exported functions affected: `buildL`, `readDirectoryWithL`
-import System.IO.Unsafe(unsafePerformIO)   
+import System.IO.Unsafe(unsafePerformIO)
 
 
 -- | the String in the name field is always a file name, never a full path.
 -- The free type variable is used in the File constructor and can hold Handles,
 -- Strings representing a file's contents or anything else you can think of.
--- We catch any IO errors in the Failed constructor. an Exception can be 
+-- We catch any IO errors in the Failed constructor. an Exception can be
 -- converted to a String with 'show'.
-data DirTree a = Failed { name :: FileName,        
+data DirTree a = Failed { name :: FileName,
                           err  :: IOException     }
                | Dir    { name     :: FileName,
-                          contents :: [DirTree a] } 
+                          contents :: [DirTree a] }
                | File   { name :: FileName,
                           file :: a               }
                  deriving Show
-               
+
 
 -- | Two DirTrees are equal if they have the same constructor, the same name
 -- (and in the case of `Dir`s) their sorted `contents` are equal:
 instance (Eq a)=> Eq (DirTree a) where
     (File n a) == (File n' a') = n == n' && a == a'
-    (Dir n cs) == (Dir n' cs') = 
+    (Dir n cs) == (Dir n' cs') =
         n == n' && sortBy comparingConstr cs == sortBy comparingConstr cs'
      -- after comparing above we can hand off to shape equality function:
     d == d' = equalShape d d'
 
 
--- | First compare constructors: Failed < Dir < File... 
+-- | First compare constructors: Failed < Dir < File...
 -- Then compare `name`...
 -- Then compare free variable parameter of `File` constructors
 instance (Ord a,Eq a) => Ord (DirTree a) where
@@ -190,7 +190,7 @@ instance (Ord a,Eq a) => Ord (DirTree a) where
         case compare n n' of
              EQ -> compare a a'
              el -> el
-    compare (Dir n cs) (Dir n' cs') = 
+    compare (Dir n cs) (Dir n' cs') =
         case compare n n' of
              EQ -> comparing sort cs cs'
              el -> el
@@ -212,7 +212,7 @@ type FileName = String
 
 
 instance Functor DirTree where
-    fmap = T.fmapDefault 
+    fmap = T.fmapDefault
 
 instance F.Foldable DirTree where
     foldMap = T.foldMapDefault
@@ -232,14 +232,14 @@ instance Functor AnchoredDirTree where
 -- given the same fixity as <$>, is that right?
 infixl 4 </$>
 
-   
+
     ----------------------------
     --[ HIGH LEVEL FUNCTIONS ]--
     ----------------------------
 
 
 -- | Build an AnchoredDirTree, given the path to a directory, opening the files
--- using readFile. 
+-- using readFile.
 -- Uses @readDirectoryWith readFile@ internally and has the effect of traversing the
 -- entire directory structure. See `readDirectoryWithL` for lazy production
 -- of a DirTree structure.
@@ -269,24 +269,24 @@ readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWithL f p = buildWith' buildLazilyUnsafe' f p
 
 
--- | write a DirTree of strings to disk. Clobbers files of the same name. 
--- Doesn't affect files in the directories (if any already exist) with 
+-- | write a DirTree of strings to disk. Clobbers files of the same name.
+-- Doesn't affect files in the directories (if any already exist) with
 -- different names. Returns a new AnchoredDirTree where failures were
 -- lifted into a `Failed` constructor:
 writeDirectory :: AnchoredDirTree String -> IO (AnchoredDirTree ())
 writeDirectory = writeDirectoryWith writeFile
 
 
--- | writes the directory structure to disk and uses the provided function to 
+-- | writes the directory structure to disk and uses the provided function to
 -- write the contents of `Files` to disk. The return value of the function will
 -- become the new `contents` of the returned, where IO errors at each node are
 -- replaced with `Failed` constructors. The returned tree can be compared to
 -- the passed tree to see what operations, if any, failed:
 writeDirectoryWith :: (FilePath -> a -> IO b) -> AnchoredDirTree a -> IO (AnchoredDirTree b)
 writeDirectoryWith f (b:/t) = (b:/) <$> write' b t
-    where write' b' (File n a) = handleDT n $ 
-              File n <$> f (b'</>n) a  
-          write' b' (Dir n cs) = handleDT n $  
+    where write' b' (File n a) = handleDT n $
+              File n <$> f (b'</>n) a
+          write' b' (Dir n cs) = handleDT n $
               do let bas = b'</>n
                  createDirectoryIfMissing True bas
                  Dir n <$> mapM (write' bas) cs
@@ -308,19 +308,19 @@ openDirectory p m = readDirectoryWith (flip openFile m) p
 
 
 
--- | builds a DirTree from the contents of the directory passed to it, saving 
+-- | builds a DirTree from the contents of the directory passed to it, saving
 -- the base directory in the Anchored* wrapper. Errors are caught in the tree in
--- the Failed constructor. The 'file' fields initially are populated with full 
+-- the Failed constructor. The 'file' fields initially are populated with full
 -- paths to the files they are abstracting.
 build :: FilePath -> IO (AnchoredDirTree FilePath)
-build = buildWith' buildAtOnce' return   -- we say 'return' here to get 
+build = buildWith' buildAtOnce' return   -- we say 'return' here to get
                                          -- back a  tree  of  FilePaths
 
 
 -- | identical to `build` but does directory reading IO lazily as needed:
 buildL :: FilePath -> IO (AnchoredDirTree FilePath)
-buildL = buildWith' buildLazilyUnsafe' return   
-                       
+buildL = buildWith' buildLazilyUnsafe' return
+
 
 
 
@@ -330,20 +330,20 @@ buildL = buildWith' buildLazilyUnsafe' return
 type UserIO a = FilePath -> IO a
 type Builder a = UserIO a -> FilePath -> IO (DirTree a)
 
--- remove non-existent file errors, which are artifacts of the "non-atomic" 
+-- remove non-existent file errors, which are artifacts of the "non-atomic"
 -- nature of traversing a system directory tree:
 buildWith' :: Builder a -> UserIO a -> FilePath -> IO (AnchoredDirTree a)
-buildWith' bf' f p = 
+buildWith' bf' f p =
     do tree <- bf' f p
        return (baseDir p :/ removeNonexistent tree)
-                    
+
 
 
 -- IO function passed to our builder and finally executed here:
 buildAtOnce' :: Builder a
 buildAtOnce' f p = handleDT n $
-           do isFile <- doesFileExist p    
-              if isFile                         
+           do isFile <- doesFileExist p
+              if isFile
                  then  File n <$> f p
                  else do cs <- getDirsFiles p
                          Dir n <$> T.mapM (buildAtOnce' f . combine p) cs
@@ -352,9 +352,9 @@ buildAtOnce' f p = handleDT n $
 
 -- using unsafePerformIO to get "lazy" traversal:
 buildLazilyUnsafe' :: Builder a
-buildLazilyUnsafe' f p = handleDT n $ 
-           do isFile <- doesFileExist p    
-              if isFile                         
+buildLazilyUnsafe' f p = handleDT n $
+           do isFile <- doesFileExist p
+              if isFile
                  then  File n <$> f p
                   -- HERE IS THE UNSAFE CODE:
                  else Dir n . fmap (rec . combine p) <$> getDirsFiles p
@@ -364,7 +364,7 @@ buildLazilyUnsafe' f p = handleDT n $
 
 
 
-                                
+
     -----------------
     --[ UTILITIES ]--
     -----------------
@@ -391,7 +391,7 @@ failed _            = False
 
 -- | returns a list of 'Failed' constructors only:
 failures :: DirTree a -> [DirTree a]
-failures = filter failed . flattenDir 
+failures = filter failed . flattenDir
 
 
 -- | maps a function to convert Failed DirTrees to Files or Dirs
@@ -399,7 +399,7 @@ failedMap :: (FileName -> IOException -> DirTree a) -> DirTree a -> DirTree a
 failedMap f = transformDir unFail
     where unFail (Failed n e) = f n e
           unFail c            = c
-                          
+
 
 ---- ORDERING AND EQUALITY ----
 
@@ -429,7 +429,7 @@ equalShape d d' = comparingShape d d' == EQ
 
 -- | a compare function that ignores the free "file" type variable:
 comparingShape :: DirTree a -> DirTree b -> Ordering
-comparingShape (Dir n cs) (Dir n' cs') = 
+comparingShape (Dir n cs) (Dir n' cs') =
     case compare n n' of
          EQ -> comp (sortCs cs) (sortCs cs')
          el -> el
@@ -479,7 +479,7 @@ dropTo _ _ = Nothing
 
 
 -- | applies the predicate to each constructor in the tree, removing it (and
--- its children, of course) when the predicate returns False. The topmost 
+-- its children, of course) when the predicate returns False. The topmost
 -- constructor will always be preserved:
 filterDir :: (DirTree a -> Bool) -> DirTree a -> DirTree a
 filterDir p = transformDir filterD
@@ -498,8 +498,8 @@ flattenDir f          = [f]
 
 
 -- | Allows for a function on a bare DirTree to be applied to an AnchoredDirTree
--- within a Functor. Very similar to and useful in combination with `<$>`: 
-(</$>) :: (Functor f) => (DirTree a -> DirTree b) -> f (AnchoredDirTree a) -> 
+-- within a Functor. Very similar to and useful in combination with `<$>`:
+(</$>) :: (Functor f) => (DirTree a -> DirTree b) -> f (AnchoredDirTree a) ->
                          f (AnchoredDirTree b)
 (</$>) f = fmap (\(b :/ t) -> b :/ f t)
 
@@ -525,12 +525,12 @@ isDirC _ = False
 
 
 
--- | tuple up the complete file path with the 'file' contents, by building up the 
+-- | tuple up the complete file path with the 'file' contents, by building up the
 -- path, trie-style, from the root. The filepath will be relative to \"anchored\"
 -- directory.
 --
--- This allows us to, for example, @mapM_ uncurry writeFile@ over a DirTree of 
--- strings, although 'writeDirectory' does a better job of this. 
+-- This allows us to, for example, @mapM_ uncurry writeFile@ over a DirTree of
+-- strings, although 'writeDirectory' does a better job of this.
 zipPaths :: AnchoredDirTree a -> DirTree (FilePath, a)
 zipPaths (b :/ t) = zipP b t
     where zipP p (File n a)   = File n (p</>n , a)
@@ -540,7 +540,7 @@ zipPaths (b :/ t) = zipP b t
 
 -- extracting pathnames and base names:
 topDir, baseDir :: FilePath -> FilePath
-topDir = last . splitDirectories 
+topDir = last . splitDirectories
 baseDir = joinPath . init . splitDirectories
 
 
@@ -548,7 +548,7 @@ baseDir = joinPath . init . splitDirectories
 ---- IO HELPERS: ----
 
 
--- | writes the directory structure (not files) of a DirTree to the anchored 
+-- | writes the directory structure (not files) of a DirTree to the anchored
 -- directory. Returns a structure identical to the supplied tree with errors
 -- replaced by `Failed` constructors:
 writeJustDirs :: AnchoredDirTree a -> IO (AnchoredDirTree a)
@@ -557,10 +557,10 @@ writeJustDirs = writeDirectoryWith (const return)
 
 ----- the let expression is an annoying hack, because dropFileName "." == ""
 ----- and getDirectoryContents fails epically on ""
--- prepares the directory contents list. we sort so that we can be sure of 
+-- prepares the directory contents list. we sort so that we can be sure of
 -- a consistent fold/traversal order on the same directory:
 getDirsFiles :: String -> IO [FilePath]
-getDirsFiles cs = do let cs' = if null cs then "." else cs 
+getDirsFiles cs = do let cs' = if null cs then "." else cs
                      dfs <- getDirectoryContents cs'
                      return $ dfs \\ [".",".."]
 
@@ -569,16 +569,16 @@ getDirsFiles cs = do let cs' = if null cs then "." else cs
 ---- FAILURE HELPERS: ----
 
 
--- handles an IO exception by returning a Failed constructor filled with that 
+-- handles an IO exception by returning a Failed constructor filled with that
 -- exception:
 handleDT :: FileName -> IO (DirTree a) -> IO (DirTree a)
 handleDT n = handle (return . Failed n)
 
 
 -- DoesNotExist errors not present at the topmost level could happen if a
--- named file or directory is deleted after being listed by 
--- getDirectoryContents but before we can get it into memory. 
---    So we filter those errors out because the user should not see errors 
+-- named file or directory is deleted after being listed by
+-- getDirectoryContents but before we can get it into memory.
+--    So we filter those errors out because the user should not see errors
 -- raised by the internal implementation of this module:
 --     This leaves the error if it exists in the top (user-supplied) level:
 removeNonexistent :: DirTree a -> DirTree a
@@ -598,28 +598,28 @@ transformDir f t = case f t of
 -- Lenses, generated with TH from "lens" -----------
 -- TODO deprecate these? Pain in the ass to generate, and maybe it's intended
 --      for users to generate their own lenses.
-_contents :: 
+_contents ::
             Applicative f =>
             ([DirTree a] -> f [DirTree a]) -> DirTree a -> f (DirTree a)
 
-_err :: 
+_err ::
        Applicative f =>
        (IOException -> f IOException) -> DirTree a -> f (DirTree a)
 
-_file :: 
+_file ::
         Applicative f =>
         (a -> f a) -> DirTree a -> f (DirTree a)
 
-_name :: 
+_name ::
         Functor f =>
         (FileName -> f FileName) -> DirTree a -> f (DirTree a)
 
-_anchor :: 
+_anchor ::
           Functor f =>
           (FilePath -> f FilePath)
           -> AnchoredDirTree a -> f (AnchoredDirTree a)
 
-_dirTree :: 
+_dirTree ::
            Functor f =>
            (DirTree t -> f (DirTree a))
            -> AnchoredDirTree t -> f (AnchoredDirTree a)
