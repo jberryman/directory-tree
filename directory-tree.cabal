@@ -1,11 +1,11 @@
 name:            directory-tree
 version:         0.12.0
 homepage:        http://brandon.si/code/directory-tree-module-released/
-synopsis:        A simple directory-like tree datatype, with useful IO functions 
-description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance  
+synopsis:        A simple directory-like tree datatype, with useful IO functions
+description:     A simple directory-like tree datatype, with useful IO functions and Foldable and Traversable instance
  .
- Provides a simple data structure mirroring a directory tree on the 
- filesystem, as well as useful functions for reading and writing 
+ Provides a simple data structure mirroring a directory tree on the
+ filesystem, as well as useful functions for reading and writing
  file and directory structures in the IO monad.
  .
  Importing the library and optional (useful) Foldable and Traverable libraries:
@@ -14,7 +14,7 @@ description:     A simple directory-like tree datatype, with useful IO functions
  > import qualified Data.Foldable as F
  > import qualified Data.Traversable as T
  .
- Write a hand-made directory tree of textfiles (strings) to the disk. 
+ Write a hand-made directory tree of textfiles (strings) to the disk.
  Simulates creating a new user Tux's home directory on a unix machine:
  .
  > writeDirectory$ "/home" :/ Dir "Tux" [File "README" "Welcome!"]
@@ -33,11 +33,11 @@ description:     A simple directory-like tree datatype, with useful IO functions
  >    let f = F.concat dt
  >    return$ b :/ File "ALL_TEXT" f
  .
- Open all the files in the current directory as lazy bytestrings, ignoring 
+ Open all the files in the current directory as lazy bytestrings, ignoring
  the base path in Anchored wrapper:
  .
  > import qualified Data.ByteString.Lazy as B
- > do (_ :/ dTree) <- readDirectoryWith B.readFile "./"     
+ > do (_ :/ dTree) <- readDirectoryWith B.readFile "./"
  .
  This version also offers an experimental function `readDirectoryWithL` that does
  lazy directory IO, allowing you to treat the returned `DirTree` as if it were a
@@ -48,7 +48,7 @@ description:     A simple directory-like tree datatype, with useful IO functions
  .
  > do d <- readDirectoryWithL readFile "/"
  >    mapM_ (putStrLn . name) $ contents $ free d
- . 
+ .
  Any ideas or suggestions for improvements are most welcome :-)
  .
  /CHANGES/: from 0.11
@@ -59,19 +59,19 @@ description:     A simple directory-like tree datatype, with useful IO functions
  .
  - remove redundant @removeNonexistent@ (thanks to dmwit for patch)
  .
- 
+
 category:        Data, System
 license:         BSD3
 license-file:    LICENSE
 copyright:       (c) 2011, Brandon Simmons <brandon.m.simmons@gmail.com>
 author:          Brandon Simmons
 maintainer:      Brandon Simmons <brandon.m.simmons@gmail.com>
-cabal-version:   >= 1.8
+cabal-version:   >= 1.8.0.4
 build-type:      Simple
 tested-with:     GHC <=7.8.2
 extra-source-files: EXAMPLES/Examples.hs, EXAMPLES/LazyExamples.hs
 
-source-repository head   
+source-repository head
     type:     git
     location: https://github.com/jberryman/directory-tree.git
 
@@ -86,4 +86,3 @@ test-suite test
     build-depends: base <5, filepath <2, directory <2
                  , process
     ghc-options:       -Wall
-
