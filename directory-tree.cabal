@@ -66,7 +66,7 @@ license-file:    LICENSE
 copyright:       (c) 2011, Brandon Simmons <brandon.m.simmons@gmail.com>
 author:          Brandon Simmons
 maintainer:      Brandon Simmons <brandon.m.simmons@gmail.com>
-cabal-version:   >= 1.8
+cabal-version:   >= 1.8.0.4
 build-type:      Simple
 tested-with:     GHC <=7.8.2
 extra-source-files: EXAMPLES/Examples.hs, EXAMPLES/LazyExamples.hs
