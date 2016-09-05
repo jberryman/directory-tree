@@ -155,7 +155,7 @@ import qualified Data.Traversable as T
 import qualified Data.Foldable as F
 
  -- exported functions affected: `buildL`, `readDirectoryWithL`
-import System.IO.Unsafe(unsafePerformIO)
+import System.IO.Unsafe(unsafeInterleaveIO)
 
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
@@ -266,8 +266,12 @@ readDirectoryWith f p = buildWith' buildAtOnce' f p
 
 -- | A "lazy" version of `readDirectoryWith` that does IO operations as needed
 -- i.e. as the tree is traversed in pure code.
--- /NOTE:/ This function uses unsafePerformIO under the hood. I believe our use
--- here is safe, but this function is experimental in this release:
+--
+-- /NOTE:/ This function uses `unsafeInterleaveIO` under the hood.  This means
+-- that:
+--
+-- * side effects are tied to evaluation order and only run on demand
+-- * you might receive exceptions in pure code
 readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWithL f p = buildWith' buildLazilyUnsafe' f p
 
@@ -353,16 +357,30 @@ buildAtOnce' f p = handleDT n $
      where n = topDir p
 
 
--- using unsafePerformIO to get "lazy" traversal:
+unsafeMapM :: (a -> IO b) -> [a] -> IO [b]
+unsafeMapM _    []  = return []
+unsafeMapM f (x:xs) = unsafeInterleaveIO io
+  where
+    io = do
+        y  <- f x
+        ys <- unsafeMapM f xs
+        return (y:ys)
+
+
+-- using unsafeInterleaveIO to get "lazy" traversal:
 buildLazilyUnsafe' :: Builder a
 buildLazilyUnsafe' f p = handleDT n $
            do isFile <- doesFileExist p
               if isFile
                  then  File n <$> f p
-                  -- HERE IS THE UNSAFE CODE:
-                 else Dir n . fmap (rec . combine p) <$> getDirsFiles p
-     -- TODO: this should really be unsafeInterleaveIO
-     where rec = unsafePerformIO . buildLazilyUnsafe' f
+                 else do
+                     files <- getDirsFiles p
+
+                     -- HERE IS THE UNSAFE LINE:
+                     dirTrees <- unsafeMapM (rec . combine p) files
+
+                     return (Dir n dirTrees)
+     where rec = buildLazilyUnsafe' f
            n = topDir p
 
 
