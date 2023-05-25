@@ -67,6 +67,7 @@ module System.Directory.Tree (
        , failedMap
        -- ** Tree Manipulations
        , flattenDir
+       , showTree
        , sortDir
        , sortDirShape
        , filterDir
@@ -142,6 +143,7 @@ CHANGES:
             zipper usage!
 -}
 
+import System.Console.ANSI
 import System.Directory
 import System.FilePath
 import System.IO
@@ -150,6 +152,7 @@ import System.IO.Error(ioeGetErrorType,isDoesNotExistErrorType)
 
 import Data.Ord (comparing)
 import Data.List (sort, sortBy, (\\))
+import Data.Maybe (catMaybes, fromMaybe)
 
 import qualified Data.Traversable as T
 import qualified Data.Foldable as F
@@ -275,6 +278,53 @@ readDirectoryWith f p = buildWith' buildAtOnce' f p
 readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWithL f p = buildWith' buildLazilyUnsafe' f p
 
+-- | generate a string that represents tree command-like output for a
+-- given DirTree.
+-- The first parameter determines whether the tree will be colorized
+-- (directories will be shown in blue bold text). Instances of Failed
+-- will be removed from the tree before it is displayed.
+showTree :: Bool -> DirTree a -> String
+showTree colorize tree =
+    let treeNoFailed = filterDir notFailed tree
+        treeM = showTree' colorize "" True treeNoFailed
+    in fromMaybe "" treeM
+        where notFailed (Failed _ _) = False
+              notFailed _ = True
+
+singleInd :: String
+singleInd = "   "
+
+substituteJoiner :: Char -> String -> String
+substituteJoiner joiner str =
+    let indWidth = length singleInd
+    in if length str > 1
+        then take (length str - indWidth) str <> (joiner:"──")
+        else str
+
+setDirFormat :: String -> String
+setDirFormat dirName =
+    setSGRCode [SetConsoleIntensity BoldIntensity]
+    <> setSGRCode [SetColor Foreground Vivid Blue]
+    <> dirName
+    <> setSGRCode [Reset]
+
+showTree' :: Bool -> String -> Bool -> DirTree a -> Maybe String
+showTree' colorize prelimStr isLast (Dir nm conts) =
+    let joiner = if isLast then '└' else '├'
+        thisLineStr = substituteJoiner joiner prelimStr
+                      <> if colorize then setDirFormat nm else nm
+        prelimStr' = prelimStr <> "│  "
+        subLinesM = showTree' colorize prelimStr' False <$> (init conts)
+        lastPrelimStr = prelimStr <> singleInd
+        lastLineM = showTree' colorize lastPrelimStr True (last conts)
+        tailLinesM = subLinesM ++ [lastLineM]
+        allLines = thisLineStr:(catMaybes tailLinesM)
+    in Just (init $ unlines $ allLines)
+showTree' _ prelimStr isLast (File nm _) =
+    let joiner = if isLast then '└' else '├'
+        thisLineStr = substituteJoiner joiner prelimStr <> nm
+    in Just thisLineStr
+showTree' _ _ _ (Failed _ _) = error "Cannot showTree' for Failed"
 
 -- | write a DirTree of strings to disk. Clobbers files of the same name.
 -- Doesn't affect files in the directories (if any already exist) with
