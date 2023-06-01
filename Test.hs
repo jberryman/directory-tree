@@ -102,7 +102,7 @@ main = do
                                 where notFailed (Failed _ _) = False
                                       notFailed _ = True
     let testTreeNonFailedEntryNum = length $ flattenDir testTreeNonFailed
-    let testTreeStr = showTree True $ dirTree testTree
+    let testTreeStr = showTree $ dirTree testTree
     let testTreeEntryNum = length $ lines testTreeStr
     if testTreeEntryNum == testTreeNonFailedEntryNum
         then putStrLn "SUCCESS"
@@ -114,6 +114,30 @@ main = do
     if all (\n -> isInfixOf n testTreeStr) allTreeNames
         then putStrLn "SUCCESS"
         else error "Could not find all names from test tree within showTree output"
+    -- check that showTreeFormatted produces exactly the same result as showTree
+    -- if the format function just takes the name
+    let nameFormatF x = name x
+    let nameFormatTreeStr = showTreeFormatted nameFormatF $ dirTree testTree
+    if nameFormatTreeStr == testTreeStr
+        then putStrLn "SUCCESS"
+        else error $ "Test tree is " <> testTreeStr
+                      <> ", but nameFormatTreeStr is "
+                      <> nameFormatTreeStr
+    -- Have all dirs format to just "DIR" and check that we have the right number
+    -- in the string
+    let dirsOnlyTestStr = showTreeFormatted dirF $ dirTree testTree
+                            where dirF (Dir _ _) = "DIR"
+                                  dirF x = name x
+    let testTreeDirsOnly = filterDir isDir (dirTree testTree)
+                            where isDir (Dir _ _) = True
+                                  isDir _ = False
+    let testTreeDirsOnlyEntryNum = length $ flattenDir testTreeDirsOnly
+    let dirsInStringCount = length $ filter (isInfixOf "DIR") (words dirsOnlyTestStr)
+    if dirsInStringCount == testTreeDirsOnlyEntryNum
+        then putStrLn "SUCCESS"
+        else error $ "Test tree has " <> (show testTreeDirsOnlyEntryNum)
+                      <> "directories, but tree string " <> dirsOnlyTestStr
+                      <> "has " <> (show dirsInStringCount)
 
 testTree :: AnchoredDirTree String
 testTree = "" :/ Dir testDir [dA , dB , dC , Failed "FAAAIIILL" undefined]

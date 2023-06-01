@@ -68,6 +68,7 @@ module System.Directory.Tree (
        -- ** Tree Manipulations
        , flattenDir
        , showTree
+       , showTreeFormatted
        , sortDir
        , sortDirShape
        , filterDir
@@ -143,7 +144,6 @@ CHANGES:
             zipper usage!
 -}
 
-import System.Console.ANSI
 import System.Directory
 import System.FilePath
 import System.IO
@@ -278,15 +278,29 @@ readDirectoryWith f p = buildWith' buildAtOnce' f p
 readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWithL f p = buildWith' buildLazilyUnsafe' f p
 
--- | generate a string that represents tree command-like output for a
+-- | Generate a string that represents tree command-like output for a
 -- given DirTree.
--- The first parameter determines whether the tree will be colorized
--- (directories will be shown in blue bold text). Instances of Failed
--- will be removed from the tree before it is displayed.
-showTree :: Bool -> DirTree a -> String
-showTree colorize tree =
+-- Instances of Failed will be removed from the tree before it is displayed.
+-- Use showTreeFormatted to apply formatting to the output.
+showTree :: DirTree a -> String
+showTree tree =
     let treeNoFailed = filterDir notFailed tree
-        treeM = showTree' colorize "" True treeNoFailed
+        nameOnlyF = \x -> name x
+        treeM = showTree' nameOnlyF "" True treeNoFailed
+    in fromMaybe "" treeM
+        where notFailed (Failed _ _) = False
+              notFailed _ = True
+
+-- | Generate a string that represents tree command-like output for a
+-- given DirTree, with customizable text for the objects within the tree.
+-- Similar to showTree, but the first parameter permits the text output for
+-- objects within the tree to be customized.
+-- If combined with a package such as ansi-terminal, this allows the tree
+-- output to be colourized.
+showTreeFormatted :: (DirTree a -> String) -> DirTree a -> String
+showTreeFormatted formatF tree =
+    let treeNoFailed = filterDir notFailed tree
+        treeM = showTree' formatF "" True treeNoFailed
     in fromMaybe "" treeM
         where notFailed (Failed _ _) = False
               notFailed _ = True
@@ -301,28 +315,21 @@ substituteJoiner joiner str =
         then take (length str - indWidth) str <> (joiner:"──")
         else str
 
-setDirFormat :: String -> String
-setDirFormat dirName =
-    setSGRCode [SetConsoleIntensity BoldIntensity]
-    <> setSGRCode [SetColor Foreground Vivid Blue]
-    <> dirName
-    <> setSGRCode [Reset]
-
-showTree' :: Bool -> String -> Bool -> DirTree a -> Maybe String
-showTree' colorize prelimStr isLast (Dir nm conts) =
+showTree' :: (DirTree a -> String) -> String -> Bool -> DirTree a -> Maybe String
+showTree' formatF prelimStr isLast dir@(Dir nm conts) =
     let joiner = if isLast then '└' else '├'
         thisLineStr = substituteJoiner joiner prelimStr
-                      <> if colorize then setDirFormat nm else nm
+                      <> formatF dir
         prelimStr' = prelimStr <> "│  "
-        subLinesM = showTree' colorize prelimStr' False <$> (init conts)
+        subLinesM = showTree' formatF prelimStr' False <$> (init conts)
         lastPrelimStr = prelimStr <> singleInd
-        lastLineM = showTree' colorize lastPrelimStr True (last conts)
+        lastLineM = showTree' formatF lastPrelimStr True (last conts)
         tailLinesM = subLinesM ++ [lastLineM]
         allLines = thisLineStr:(catMaybes tailLinesM)
     in Just (init $ unlines $ allLines)
-showTree' _ prelimStr isLast (File nm _) =
+showTree' formatF prelimStr isLast file@(File nm _) =
     let joiner = if isLast then '└' else '├'
-        thisLineStr = substituteJoiner joiner prelimStr <> nm
+        thisLineStr = substituteJoiner joiner prelimStr <> formatF file
     in Just thisLineStr
 showTree' _ _ _ (Failed _ _) = error "Cannot showTree' for Failed"
 
