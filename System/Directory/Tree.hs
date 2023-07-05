@@ -67,6 +67,8 @@ module System.Directory.Tree (
        , failedMap
        -- ** Tree Manipulations
        , flattenDir
+       , showTree
+       , showTreeFormatted
        , sortDir
        , sortDirShape
        , filterDir
@@ -150,6 +152,7 @@ import System.IO.Error(ioeGetErrorType,isDoesNotExistErrorType)
 
 import Data.Ord (comparing)
 import Data.List (sort, sortBy, (\\))
+import Data.Maybe (catMaybes, fromMaybe)
 
 import qualified Data.Traversable as T
 import qualified Data.Foldable as F
@@ -275,6 +278,60 @@ readDirectoryWith f p = buildWith' buildAtOnce' f p
 readDirectoryWithL :: (FilePath -> IO a) -> FilePath -> IO (AnchoredDirTree a)
 readDirectoryWithL f p = buildWith' buildLazilyUnsafe' f p
 
+-- | Generate a string that represents tree command-like output for a
+-- given DirTree.
+-- Instances of Failed will be removed from the tree before it is displayed.
+-- Use showTreeFormatted to apply formatting to the output.
+showTree :: DirTree a -> String
+showTree tree =
+    let treeNoFailed = filterDir notFailed tree
+        nameOnlyF = \x -> name x
+        treeM = showTree' nameOnlyF "" True treeNoFailed
+    in fromMaybe "" treeM
+        where notFailed (Failed _ _) = False
+              notFailed _ = True
+
+-- | Generate a string that represents tree command-like output for a
+-- given DirTree, with customizable text for the objects within the tree.
+-- Similar to showTree, but the first parameter permits the text output for
+-- objects within the tree to be customized.
+-- If combined with a package such as ansi-terminal, this allows the tree
+-- output to be colourized.
+showTreeFormatted :: (DirTree a -> String) -> DirTree a -> String
+showTreeFormatted formatF tree =
+    let treeNoFailed = filterDir notFailed tree
+        treeM = showTree' formatF "" True treeNoFailed
+    in fromMaybe "" treeM
+        where notFailed (Failed _ _) = False
+              notFailed _ = True
+
+singleInd :: String
+singleInd = "   "
+
+substituteJoiner :: Char -> String -> String
+substituteJoiner joiner str =
+    let indWidth = length singleInd
+    in if length str > 1
+        then take (length str - indWidth) str <> (joiner:"──")
+        else str
+
+showTree' :: (DirTree a -> String) -> String -> Bool -> DirTree a -> Maybe String
+showTree' formatF prelimStr isLast dir@(Dir nm conts) =
+    let joiner = if isLast then '└' else '├'
+        thisLineStr = substituteJoiner joiner prelimStr
+                      <> formatF dir
+        prelimStr' = prelimStr <> "│  "
+        subLinesM = showTree' formatF prelimStr' False <$> (init conts)
+        lastPrelimStr = prelimStr <> singleInd
+        lastLineM = showTree' formatF lastPrelimStr True (last conts)
+        tailLinesM = subLinesM ++ [lastLineM]
+        allLines = thisLineStr:(catMaybes tailLinesM)
+    in Just (init $ unlines $ allLines)
+showTree' formatF prelimStr isLast file@(File nm _) =
+    let joiner = if isLast then '└' else '├'
+        thisLineStr = substituteJoiner joiner prelimStr <> formatF file
+    in Just thisLineStr
+showTree' _ _ _ (Failed _ _) = error "Cannot showTree' for Failed"
 
 -- | write a DirTree of strings to disk. Clobbers files of the same name.
 -- Doesn't affect files in the directories (if any already exist) with

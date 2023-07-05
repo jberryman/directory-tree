@@ -10,6 +10,7 @@ import System.Directory
 import System.Process
 import System.IO.Error(ioeGetErrorType,isPermissionErrorType)
 import Control.Monad(void)
+import Data.List(isInfixOf)
 
 
 
@@ -21,13 +22,13 @@ main :: IO ()
 main = do
     putStrLn "-- The following tests will either fail with an error "
     putStrLn "-- message or with an 'undefined' error"
-    -- write our testing directory structure to disk. We include Failed 
+    -- write our testing directory structure to disk. We include Failed
     -- constructors which should be discarded:
     _:/written <- writeDirectory testTree
     putStrLn "OK"
 
 
-    if (fmap (const ()) (filterDir (not . failed) $dirTree testTree)) == 
+    if (fmap (const ()) (filterDir (not . failed) $dirTree testTree)) ==
                                   filterDir (not . failed) written
        then return ()
        else error "writeDirectory returned a tree that didn't match"
@@ -48,14 +49,14 @@ main = do
     t@(_:/Dir _ [_,_,Dir "C" [unreadable_constr,_,_]]) <- sortDir </$> id <$> readDirectory testDir
     if  t == tL  then return () else error "lazy read  /=  standard read"
     putStrLn "OK"
-    
+
     -- make sure the unreadable file left the correct error type in a Failed:
-    if isPermissionErrorType $ ioeGetErrorType $ err unreadable_constr 
+    if isPermissionErrorType $ ioeGetErrorType $ err unreadable_constr
        then return ()
        else error "wrong error type for Failed file read"
     putStrLn "OK"
-    
-    
+
+
     -- run lazy fold, concating file contents. compare for equality:
     tL_again <- sortDir </$> readDirectoryWithL readFile testDir
     let tL_concated = F.concat $ dirTree tL_again
@@ -83,10 +84,10 @@ main = do
         -- check ordering by dir contents list length:
        Dir "d" [File "b" "b",File "a" "a"] > Dir "d" [File "a" "a"] &&
         -- recursive ordering on contents:
-       Dir "d" [File "b" "b", Dir "c" [File "a" "b"]] > Dir "d" [File "b" "b", Dir "c" [File "a" "a"]] 
+       Dir "d" [File "b" "b", Dir "c" [File "a" "b"]] > Dir "d" [File "b" "b", Dir "c" [File "a" "a"]]
         then putStrLn "OK"
         else error "Ord/Eq instance is messed up"
-    
+
     if Dir "d" [File "b" "b",File "a" "a"] `equalShape` Dir "d" [File "a" undefined, File "b" undefined]
         then putStrLn "OK"
         else error "equalShape or comparinghape functions broken"
@@ -94,8 +95,49 @@ main = do
     -- clean up by removing the directory:
     void $ system $ "rm -r " ++ testDir
     putStrLn "SUCCESS"
-    
 
+    -- Test showTree
+    -- check that showTree produces # of lines equal to length of tree, minus Failed
+    let testTreeNonFailed = filterDir notFailed (dirTree testTree)
+                                where notFailed (Failed _ _) = False
+                                      notFailed _ = True
+    let testTreeNonFailedEntryNum = length $ flattenDir testTreeNonFailed
+    let testTreeStr = showTree $ dirTree testTree
+    let testTreeEntryNum = length $ lines testTreeStr
+    if testTreeEntryNum == testTreeNonFailedEntryNum
+        then putStrLn "SUCCESS"
+        else error $ "Test tree has " <> (show testTreeNonFailedEntryNum)
+                      <> "non-failed entries, but tree string has "
+                      <> (show testTreeEntryNum)
+    -- check that showTree has the name of every file or dir in its output
+    let allTreeNames = name <$> (flattenDir testTreeNonFailed)
+    if all (\n -> isInfixOf n testTreeStr) allTreeNames
+        then putStrLn "SUCCESS"
+        else error "Could not find all names from test tree within showTree output"
+    -- check that showTreeFormatted produces exactly the same result as showTree
+    -- if the format function just takes the name
+    let nameFormatF x = name x
+    let nameFormatTreeStr = showTreeFormatted nameFormatF $ dirTree testTree
+    if nameFormatTreeStr == testTreeStr
+        then putStrLn "SUCCESS"
+        else error $ "Test tree is " <> testTreeStr
+                      <> ", but nameFormatTreeStr is "
+                      <> nameFormatTreeStr
+    -- Have all dirs format to just "DIR" and check that we have the right number
+    -- in the string
+    let dirsOnlyTestStr = showTreeFormatted dirF $ dirTree testTree
+                            where dirF (Dir _ _) = "DIR"
+                                  dirF x = name x
+    let testTreeDirsOnly = filterDir isDir (dirTree testTree)
+                            where isDir (Dir _ _) = True
+                                  isDir _ = False
+    let testTreeDirsOnlyEntryNum = length $ flattenDir testTreeDirsOnly
+    let dirsInStringCount = length $ filter (isInfixOf "DIR") (words dirsOnlyTestStr)
+    if dirsInStringCount == testTreeDirsOnlyEntryNum
+        then putStrLn "SUCCESS"
+        else error $ "Test tree has " <> (show testTreeDirsOnlyEntryNum)
+                      <> "directories, but tree string " <> dirsOnlyTestStr
+                      <> "has " <> (show dirsInStringCount)
 
 testTree :: AnchoredDirTree String
 testTree = "" :/ Dir testDir [dA , dB , dC , Failed "FAAAIIILL" undefined]
